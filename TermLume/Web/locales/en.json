@@ -162,7 +162,7 @@
   "命令片段已保存": "Snippet saved",
   "在工作空间与终端标签间循环": "Cycle through workspace and terminal tabs",
   "地址、主机名、算法或指纹": "Address, host name, algorithm or fingerprint",
-  "基于 WPF、WebView2、SSH.NET 与 xterm.js。独立设计，不使用 Termius 的代码、商标或素材。支持 SSH 终端与 SFTP 文件管理，暂不包含跳板机和云同步。": "Built with WPF, WebView2, SSH.NET and xterm.js. Independently designed, without Termius code, trademarks or assets. Supports SSH terminals and SFTP file management; jump hosts and cloud sync are not included.",
+  "基于 WPF、WebView2、SSH.NET 与 xterm.js。支持 SSH 终端与 SFTP 文件管理，暂不包含跳板机和云同步。": "Built with WPF, WebView2, SSH.NET and xterm.js. Supports SSH terminals and SFTP file management; jump hosts and cloud sync are not included.",
   "填入终端": "Insert into terminal",
   "填入终端？": "Insert into terminal?",
   "增大终端字号": "Increase terminal font size",
