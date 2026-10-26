@@ -3,17 +3,21 @@ using TermLume.Models;
 
 namespace TermLume.Services;
 
-public enum HostKeyStatus { Unknown, Trusted, Changed }
+public enum HostKeyStatus { Unknown, Trusted, Changed, AlgorithmChanged }
 
 /// <summary>按地址、端口和算法管理服务器信任；指纹变化不会自动替换原有信任。</summary>
 public sealed class KnownHostRegistry(Workspace workspace, WorkspaceStore store)
 {
-    public static string Endpoint(HostProfile host, string algorithm) => $"[{host.Address.ToLowerInvariant()}]:{host.Port} {algorithm}";
+    private static string HostPrefix(HostProfile host) => $"[{host.Address.ToLowerInvariant()}]:{host.Port} ";
+    public static string Endpoint(HostProfile host, string algorithm) => HostPrefix(host) + algorithm;
+
+    private bool HasHost(HostProfile host) => workspace.KnownHosts.Keys.Any(endpoint => endpoint.StartsWith(HostPrefix(host), StringComparison.Ordinal));
 
     public HostKeyStatus Verify(HostProfile host, string algorithm, string fingerprint)
     {
         var endpoint = Endpoint(host, algorithm);
-        if (!workspace.KnownHosts.TryGetValue(endpoint, out var saved)) return HostKeyStatus.Unknown;
+        if (!workspace.KnownHosts.TryGetValue(endpoint, out var saved))
+            return HasHost(host) ? HostKeyStatus.AlgorithmChanged : HostKeyStatus.Unknown;
         var existing = workspace.KnownHostDetails.GetValueOrDefault(endpoint);
         // 使用新的元数据对象，保证保存失败时仍能恢复未被修改的旧记录。
         var metadata = new KnownHostMetadata
@@ -40,7 +44,7 @@ public sealed class KnownHostRegistry(Workspace workspace, WorkspaceStore store)
     public void Trust(HostProfile host, string algorithm, string fingerprint)
     {
         var endpoint = Endpoint(host, algorithm);
-        if (workspace.KnownHosts.ContainsKey(endpoint)) throw new InvalidOperationException("已存在信任记录，不能覆盖原有指纹。");
+        if (HasHost(host)) throw new InvalidOperationException("此服务器已有信任记录，不能通过新增算法重新信任。请核验后在已知主机中显式更新记录。");
         Persist(endpoint, fingerprint, new KnownHostMetadata { FirstTrustedAt = DateTimeOffset.Now, LastVerifiedAt = DateTimeOffset.Now });
     }
 

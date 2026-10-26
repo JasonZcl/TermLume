@@ -10,6 +10,7 @@ namespace TermLume.Services;
 /// <summary>管理单个 SSH PTY、串行输入队列和带渲染确认的输出读取流程。</summary>
 public sealed class SshSession : IDisposable
 {
+    public const int MaximumBufferedOutput = ShellStream.MaximumReadBufferLength;
     private readonly SshClient client;
     private readonly SshAuthentication authentication;
     private readonly CancellationTokenSource lifetime = new();
@@ -18,6 +19,7 @@ public sealed class SshSession : IDisposable
     private readonly Channel<Action<ShellStream>> input = Channel.CreateBounded<Action<ShellStream>>(new BoundedChannelOptions(1024) { SingleReader = true });
     private ShellStream? shell;
     private int disposed;
+    private int ended;
     public event Action<string>? Output;
     public event Action? Connected;
     public event Action<string?>? Ended;
@@ -27,6 +29,8 @@ public sealed class SshSession : IDisposable
         authentication = new SshAuthentication(host, secret);
         client = new SshClient(authentication.Connection) { KeepAliveInterval = TimeSpan.FromSeconds(25) };
         client.HostKeyReceived += (_, args) => args.CanTrust = verifyHostKey(args);
+        client.ErrorOccurred += (_, args) => End(args.Exception.Message == "Terminal receive buffer limit exceeded."
+            ? "远端输出超过安全缓冲上限，连接已断开。" : args.Exception.Message);
     }
 
     public async Task ConnectAsync(uint columns, uint rows)
@@ -35,7 +39,7 @@ public sealed class SshSession : IDisposable
         lifetime.Token.ThrowIfCancellationRequested();
         var stream = await Task.Run(() => client.CreateShellStream("xterm-256color", columns, rows, 0, 0, 65536), lifetime.Token).ConfigureAwait(false);
         shell = stream;
-        if (Volatile.Read(ref disposed) != 0)
+        if (lifetime.IsCancellationRequested || Volatile.Read(ref disposed) != 0)
         {
             stream.Dispose();
             throw new OperationCanceledException();
@@ -73,8 +77,7 @@ public sealed class SshSession : IDisposable
         }
         catch (Exception exception) when (exception is IOException or SshException or ObjectDisposedException or OperationCanceledException)
         {
-            if (!lifetime.IsCancellationRequested) Ended?.Invoke(exception.Message);
-            Dispose();
+            if (!lifetime.IsCancellationRequested) End(exception.Message);
         }
     }
 
@@ -96,7 +99,8 @@ public sealed class SshSession : IDisposable
                 {
                     Output.Invoke(new string(characters, 0, characterCount));
                     // 等待 xterm.js 消费当前批次，避免持续输出淹没 WebView2 消息队列。
-                    outputAcknowledged.Wait(lifetime.Token);
+                    if (!outputAcknowledged.Wait(TimeSpan.FromSeconds(30), lifetime.Token))
+                        throw new IOException("终端界面响应超时，为保护内存已断开连接。");
                 }
             }
         }
@@ -106,9 +110,17 @@ public sealed class SshSession : IDisposable
         }
         finally
         {
-            if (!lifetime.IsCancellationRequested) Ended?.Invoke(error);
-            Dispose();
+            if (!lifetime.IsCancellationRequested) End(error);
         }
+    }
+
+    private void End(string? error)
+    {
+        if (Volatile.Read(ref disposed) != 0 || Interlocked.Exchange(ref ended, 1) != 0) return;
+        lifetime.Cancel();
+        input.Writer.TryComplete();
+        try { Ended?.Invoke(error); }
+        finally { _ = Task.Run(Dispose); }
     }
 
     public void Dispose()

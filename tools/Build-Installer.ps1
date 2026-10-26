@@ -1,6 +1,7 @@
 [CmdletBinding()]
 param(
-    [string]$IsccPath
+    [string]$IsccPath,
+    [string]$BuildDirectory
 )
 
 $ErrorActionPreference = 'Stop'
@@ -12,6 +13,8 @@ $version = [string]$project.Project.PropertyGroup.Version
 if ($version -notmatch '^\d+\.\d+\.\d+$') {
     throw "Expected a three-part app version, got: $version"
 }
+$runtimeVersion = [version]$project.Project.PropertyGroup.RuntimeFrameworkVersion
+if ($runtimeVersion -lt [version]'10.0.14') { throw 'The self-contained runtime must meet the .NET 10.0.14 security baseline.' }
 
 if (-not $IsccPath) {
     $compiler = Get-Command ISCC.exe -ErrorAction SilentlyContinue
@@ -31,8 +34,16 @@ if (-not $IsccPath -or -not (Test-Path -LiteralPath $IsccPath -PathType Leaf)) {
 
 # 发布输出只包含程序文件；真实用户配置始终位于独立的 LocalAppData 目录。
 $artifacts = Join-Path $repository 'artifacts'
-$publishDirectory = Join-Path $artifacts "publish-setup-v$version"
-$prerequisites = Join-Path $artifacts 'installer-prerequisites'
+if (-not $BuildDirectory) {
+    $BuildDirectory = Join-Path ([IO.Path]::GetTempPath()) ('TermLume-installer-' + [guid]::NewGuid().ToString('N'))
+}
+$BuildDirectory = [IO.Path]::GetFullPath($BuildDirectory)
+if ($BuildDirectory.StartsWith($artifacts + '\', [StringComparison]::OrdinalIgnoreCase) -or $BuildDirectory -eq $artifacts) {
+    throw 'Keep build intermediates outside artifacts; this folder is reserved for installers.'
+}
+$publishDirectory = Join-Path $BuildDirectory 'publish'
+if (Test-Path -LiteralPath $publishDirectory) { throw 'Use a fresh BuildDirectory to avoid packaging stale program files.' }
+$prerequisites = Join-Path $BuildDirectory 'installer-prerequisites'
 $bootstrapper = Join-Path $prerequisites 'MicrosoftEdgeWebview2Setup.exe'
 New-Item -ItemType Directory -Path $artifacts, $prerequisites -Force | Out-Null
 
@@ -47,7 +58,19 @@ if ($signature.Status -ne 'Valid' -or $signature.SignerCertificate.Subject -notm
 
 & dotnet publish $projectPath -c Release -r win-x64 --self-contained true -p:PublishSingleFile=false -p:PublishTrimmed=false -o $publishDirectory
 if ($LASTEXITCODE -ne 0) { throw 'Self-contained publish failed.' }
-Copy-Item -LiteralPath (Join-Path $repository 'README.md') -Destination (Join-Path $publishDirectory 'README.md')
+$readme = [IO.File]::ReadAllText((Join-Path $repository 'README.md'))
+$readme = [regex]::Replace($readme, '(?ms)^### 校验安装包\r?\n.*?(?=^## 当前功能)', "安装包校验值请查看仓库当前版本 README；不在安装包内嵌入自身校验值。`n`n")
+$readme = [regex]::Replace($readme, '(?m)^\| 安装包大小 \|.*$', '| 安装包大小 | 以下载的安装包文件属性为准 |')
+[IO.File]::WriteAllText((Join-Path $publishDirectory 'README.md'), $readme, [Text.UTF8Encoding]::new($false))
+$runtimeConfig = Get-Content -LiteralPath (Join-Path $publishDirectory 'TermLume.runtimeconfig.json') -Raw | ConvertFrom-Json
+foreach ($frameworkName in @('Microsoft.NETCore.App', 'Microsoft.WindowsDesktop.App')) {
+    $framework = @($runtimeConfig.runtimeOptions.includedFrameworks | Where-Object name -eq $frameworkName)
+    if ($framework.Count -ne 1 -or [version]$framework[0].version -ne $runtimeVersion) {
+        throw "Published $frameworkName does not match the pinned security runtime $runtimeVersion."
+    }
+}
+@{ version = $version; runtimeVersion = $runtimeVersion.ToString(); publish = $publishDirectory; bootstrapper = $bootstrapper } |
+    ConvertTo-Json | Set-Content -LiteralPath (Join-Path $BuildDirectory 'build-info.json')
 
 # 防止误把已有工作空间、日志或浏览器用户目录当作发布文件分发。
 $unexpectedData = Get-ChildItem -LiteralPath $publishDirectory -Recurse -Force | Where-Object {
@@ -63,6 +86,6 @@ if ($LASTEXITCODE -ne 0) { throw 'Installer compilation failed.' }
 
 $installer = Join-Path $artifacts "TermLume-$version-win-x64-Setup.exe"
 $checksum = (Get-FileHash -LiteralPath $installer -Algorithm SHA256).Hash.ToLowerInvariant()
-[System.IO.File]::WriteAllText("$installer.sha256", "$checksum  $([System.IO.Path]::GetFileName($installer))`n", [System.Text.Encoding]::ASCII)
+Write-Host "Build directory: $BuildDirectory"
 Write-Host "Installer: $installer"
 Write-Host "SHA256: $checksum"

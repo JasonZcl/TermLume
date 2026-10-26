@@ -310,6 +310,13 @@ public partial class MainWindow : Window
             var endpoint = KnownHostRegistry.Endpoint(host, key.HostKeyName);
             var fingerprint = "SHA256:" + key.FingerPrintSHA256;
             var status = KnownHosts.Verify(host, key.HostKeyName, fingerprint);
+            if (status == HostKeyStatus.AlgorithmChanged)
+            {
+                Record("hostkey.algorithmChanged", "已有服务器提供了未信任的密钥算法，连接已阻止。", host, sessionId, level: "error", category: "security",
+                    details: new() { ["endpoint"] = endpoint, ["receivedFingerprint"] = fingerprint });
+                MessageBox.Show(this, Localization.Text("{0}:{1} 已有服务器信任记录，但本次提供了未信任的密钥算法：{2}。\n\n当前指纹：{3}\n\n连接已阻止，不会作为首次连接重新信任。请联系管理员核验，并在「已知主机」中显式更新该服务器的信任记录。", host.Address, host.Port, key.HostKeyName, fingerprint), Localization.Text("服务器身份发生变化"), MessageBoxButton.OK, MessageBoxImage.Error);
+                return false;
+            }
             if (status != HostKeyStatus.Unknown)
             {
                 NotifyKnownHosts();

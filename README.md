@@ -6,13 +6,13 @@ TermLume 是一款 Windows SSH / SFTP 客户端，基于 **.NET 10 / WPF / WebVi
 
 **安装包就在仓库根目录的 `artifacts` 文件夹中：**
 
-### [下载 TermLume v0.7.0 Windows x64 安装包](artifacts/TermLume-0.7.0-win-x64-Setup.exe)
+### [下载 TermLume v0.7.1 Windows x64 安装包](artifacts/TermLume-0.7.1-win-x64-Setup.exe)
 
 | 项目 | 说明 |
 | --- | --- |
-| 当前版本 | v0.7.0 |
-| 安装包位置 | `artifacts/TermLume-0.7.0-win-x64-Setup.exe` |
-| 安装包大小 | 约 48.7 MiB（51,057,514 字节） |
+| 当前版本 | v0.7.1 |
+| 安装包位置 | `artifacts/TermLume-0.7.1-win-x64-Setup.exe` |
+| 安装包大小 | 约 48.7 MiB（51,088,945 字节） |
 | 目标平台 | Windows 10 / 11，win-x64 安装包 |
 | .NET 环境 | 已内置，不需要另外安装 .NET Runtime 或 SDK |
 | WebView2 环境 | 已安装则复用；缺少时需要联网安装 Microsoft 官方运行时 |
@@ -29,13 +29,13 @@ TermLume 是一款 Windows SSH / SFTP 客户端，基于 **.NET 10 / WPF / WebVi
 当前仓库安装包的 SHA-256 为：
 
 ```text
-b58ad2e2cce0e69e26e7514c99742b4a9705c939bde1b40dd715e9e17ccc48cd
+31d986a09e07ca16325fbec281c54a658bf872772d6883496fc77ff9dcc1074e
 ```
 
 在仓库根目录运行以下命令，将输出的 `Hash` 与上述值比较（大小写不影响比较）：
 
 ```powershell
-Get-FileHash -LiteralPath ./artifacts/TermLume-0.7.0-win-x64-Setup.exe -Algorithm SHA256
+Get-FileHash -LiteralPath ./artifacts/TermLume-0.7.1-win-x64-Setup.exe -Algorithm SHA256
 ```
 
 应用和安装包目前未使用代码签名证书，Windows 可能提示发布者未知。校验值用于核对文件完整性，不能代替发布者数字签名。
@@ -66,7 +66,7 @@ Get-FileHash -LiteralPath ./artifacts/TermLume-0.7.0-win-x64-Setup.exe -Algorith
 
 ## 开发运行
 
-需要 Windows 10/11、.NET 10 SDK 及 Microsoft Edge WebView2 Evergreen Runtime。首次还原 NuGet 包需要网络；终端前端依赖已打包在仓库，无需 Node.js、npm 或 CDN。
+需要 Windows 10/11、.NET 10 SDK 及 Microsoft Edge WebView2 Evergreen Runtime；开发运行所需的 .NET Desktop Runtime 至少为 10.0.14，建议使用含该安全补丁或更新补丁的 SDK。首次还原 NuGet 包需要网络；终端前端依赖已打包在仓库，无需 Node.js、npm 或 CDN。SSH.NET 使用仓库 `vendor/packages` 中的本地安全修订包，来源及重建方法见该目录 README，不要替换成未设接收限额的上游版本。
 
 ```powershell
 dotnet restore TermLume.sln
@@ -74,15 +74,15 @@ dotnet build TermLume.sln
 dotnet run --project TermLume
 ```
 
-发布框架依赖版（目标设备需要 .NET 10 Desktop Runtime 和 WebView2 Runtime）：
+发布框架依赖版（目标设备需要 .NET 10.0.14 或更新安全补丁的 Desktop Runtime，以及 WebView2 Runtime）：
 
 ```powershell
-dotnet publish TermLume/TermLume.csproj -c Release -r win-x64 --self-contained false -o artifacts/publish-v0.7.0
+dotnet publish TermLume/TermLume.csproj -c Release -r win-x64 --self-contained false -o "$env:TEMP/TermLume-framework-dependent-v0.7.1"
 ```
 
 ## Windows 安装包
 
-双击 `artifacts/TermLume-0.7.0-win-x64-Setup.exe` 安装。支持简体中文 / English 安装及卸载界面，默认仅为当前 Windows 用户安装，无需管理员权限；可选桌面快捷方式，也可从开始菜单打开。安装包内置 .NET，目标电脑无需另外安装 .NET Desktop Runtime。缺少 WebView2 Runtime 时，安装器使用带 Microsoft 数字签名的官方引导程序联网安装；离线电脑请提前安装 WebView2 Evergreen Runtime。运行时安装失败会中止应用安装，不继续更新程序文件。不自动启动应用，避免意外创建连接。
+双击 `artifacts/TermLume-0.7.1-win-x64-Setup.exe` 安装。支持简体中文 / English 安装及卸载界面，默认仅为当前 Windows 用户安装，无需管理员权限；可选桌面快捷方式，也可从开始菜单打开。安装包内置 .NET，目标电脑无需另外安装 .NET Desktop Runtime。缺少 WebView2 Runtime 时，安装器使用带 Microsoft 数字签名的官方引导程序联网安装；离线电脑请提前安装 WebView2 Evergreen Runtime。运行时安装失败会中止应用安装，不继续更新程序文件。不自动启动应用，避免意外创建连接。
 
 - **升级 / 重装**：直接运行新安装包，不需要先卸载。使用固定安装标识，默认沿用安装目录（初始为 `%LOCALAPPDATA%\Programs\TermLume`），程序文件更新，个人数据仍在 `%LOCALAPPDATA%\TermLume`；安装器不写入、初始化或迁移该目录。之前解压版的主机、分组、快捷键、语言、信任指纹和日志也会继续使用。阻止安装低于已安装版本的安装包，避免旧版应用修改新版配置。每个 Windows 账号分别保存自己的数据。
 - **先关闭应用**：安装 / 卸载前请保存远端工作并正常退出 TermLume。检测到运行中的实例会要求先关闭，不强制结束 SSH 会话、不自动重启应用。
@@ -98,13 +98,33 @@ dotnet publish TermLume/TermLume.csproj -c Release -r win-x64 --self-contained f
 ./tools/Build-Installer.ps1
 ```
 
-脚本发布独立运行的 win-x64 文件到 `artifacts/publish-setup-v0.7.0`，校验 WebView2 引导程序的 Microsoft 签名，再生成 EXE 安装包和 `.sha256` 校验文件。应用与安装包当前未使用商业代码签名证书，Windows SmartScreen 可能提示发布者未知；分发时请同时提供 SHA-256 校验值。构建工具只需要 Inno Setup 编译器，不会自动安装到开发者的个人软件目录。
+脚本在系统临时目录生成自包含 win-x64 发布文件，校验 WebView2 引导程序的 Microsoft 签名，并校验内置 .NET / WPF 运行时与项目固定的 10.0.14 安全基线一致；`artifacts` 只输出 EXE 安装包，SHA-256 输出到控制台。应用与安装包当前未使用商业代码签名证书，Windows SmartScreen 可能提示发布者未知；分发时请同时提供 SHA-256 校验值。构建工具只需要 Inno Setup 编译器，不会自动安装到开发者的个人软件目录。自包含运行时不会随系统 .NET 自动升级，需要定期更新项目安全基线并重新打包。
 
-安装器源码为 `tools/installer/TermLume.iss`；简体中文语言文件来自 Inno Setup 官方源码仓库的 `Files/Languages/ChineseSimplified.isl`，保留原维护者信息。安装及 WebView2 分发逻辑参考 Inno Setup 官方帮助与 Microsoft WebView2 Distribution 文档。隔离验证脚本为 `tools/Test-Installer.ps1`，只在仓库 `artifacts/qa` 下使用独立的安装标识、安装目录和模拟数据，不安装或卸载真实用户版本。
+安装器源码为 `tools/installer/TermLume.iss`；简体中文语言文件来自 Inno Setup 官方源码仓库的 `Files/Languages/ChineseSimplified.isl`，保留原维护者信息。安装及 WebView2 分发逻辑参考 Inno Setup 官方帮助与 Microsoft WebView2 Distribution 文档。隔离验证脚本为 `tools/Test-Installer.ps1`，只在构建临时目录下使用独立的安装标识、安装目录和模拟数据，不安装或卸载真实用户版本：
+
+```powershell
+$build = Join-Path $env:TEMP ("TermLume-build-" + [guid]::NewGuid().ToString('N'))
+./tools/Build-Installer.ps1 -BuildDirectory $build
+./tools/Test-Installer.ps1 -BuildDirectory $build
+```
+
+### 安全回归测试
+
+测试只使用随机临时目录、模拟凭据和监听 `127.0.0.1` 的本地 SSH / SFTP 服务，不打开真实应用或个人配置。需要 Python 和 Paramiko；推荐使用独立虚拟环境：
+
+```powershell
+$venv = Join-Path $env:TEMP ("TermLume-test-python-" + [guid]::NewGuid().ToString('N'))
+python -m venv $venv
+& "$venv/Scripts/python.exe" -m pip install paramiko==4.0.0
+$env:TERMLUME_TEST_PYTHON = "$venv/Scripts/python.exe"
+dotnet run --project tests/TermLume.SecurityTests -c Release -p:SelfContained=true
+```
+
+覆盖密钥与算法变更、旧信任记录兼容、写盘失败回滚、无前端 ACK 的输出洪泛与确认超时、PTY 建立阶段洪泛、正常 UTF-8 输出与窗口调整、密码和加密 / 未加密 RSA 私钥认证、会话隔离，以及 SFTP 上传下载与拒绝覆盖。测试使用自包含的 .NET 10.0.14 运行时。
 
 ### 安装包的 Git 管理
 
-仓库通过 `.gitignore` **仅允许 `artifacts` 根目录中命名为 `TermLume-*-win-x64-Setup.exe` 的安装包纳入版本控制**。当前版本对应 `artifacts/TermLume-0.7.0-win-x64-Setup.exe`，克隆包含该文件的提交后即可获取安装包，无需本地编译。
+仓库通过 `.gitignore` **仅允许 `artifacts` 根目录中命名为 `TermLume-*-win-x64-Setup.exe` 的安装包纳入版本控制**。当前版本对应 `artifacts/TermLume-0.7.1-win-x64-Setup.exe`，克隆包含该文件的提交后即可获取安装包，无需本地编译。
 
 `publish*` 发布目录、`qa` 测试文件、运行时引导程序缓存、ZIP、截图和生成的 `.sha256` 文件仍被忽略，不应作为安装包提交。安装包内不得包含 `workspace.json`、`activity-log.json`、私钥或其他个人数据。
 
@@ -185,6 +205,8 @@ SFTP 活动会记录连接结果、文件操作类型、传输方向和完成字
 - 不持久化密码或私钥口令，不复制私钥、不云同步。认证库使用托管字符串，不能承诺密码在内存中被即时清零。
 - RSA 私钥使用 SHA-2 签名认证，不尝试旧的 `ssh-rsa` / SHA-1 签名或 DSA。仅支持这些旧算法的服务器需要先升级服务器配置。
 - 首次信任（TOFU）不是自动验证服务器身份；指纹应由独立可信渠道确认。
+- 同一地址和端口已有身份时，未信任的新密钥算法同样阻止连接，不会重新弹出首次信任提示；核验服务器变更后，需在已知主机中显式移除该端点旧记录再重新登记。已有多算法信任记录仍可正常核验。
+- 单个终端的 SSH 接收缓冲在分配前限制为 4 MiB，包含 PTY 建立阶段；超限仅断开对应会话。界面单批输出确认超过 30 秒也会断开连接，防止无响应界面长期占用连接资源。
 - WebView2 只加载本地虚拟域名资源，禁止外部导航、弹窗、下载和权限申请；页面采用 CSP，不从 CDN 加载脚本。终端输出交由 xterm.js 解析，不插入 HTML。
 - 将配置备份到安全位置。应用退出后可复制 / 恢复 `workspace.json`。损坏的配置会阻止启动，不会被静默覆盖。
 - 不含遥测或应用层云端请求；WebView2 Runtime 自身由 Microsoft 管理。
@@ -206,6 +228,8 @@ SFTP 活动会记录连接结果、文件操作类型、传输方向和完成字
 | `tools/Build-Installer.ps1` | 构建自包含 Windows 安装包 |
 | `tools/installer` | Inno Setup 安装 / 卸载脚本与安装器语言文件 |
 | `tools/Test-Installer.ps1` | 隔离的安装、升级、数据保留及卸载清理验证 |
-| `artifacts/TermLume-0.7.0-win-x64-Setup.exe` | 可直接下载安装的 Windows 应用安装包 |
+| `tests/TermLume.SecurityTests` | 隔离的主机身份、输出洪泛及 SSH / SFTP 回归测试 |
+| `vendor/packages`、`tools/Build-SshNet.ps1` | 固定来源的 SSH.NET 安全补丁及重建脚本 |
+| `artifacts/TermLume-0.7.1-win-x64-Setup.exe` | 可直接下载安装的 Windows 应用安装包 |
 
 第三方终端资源许可证位于 `TermLume/Web/vendor`。本地构建产生的中间产物不属于发布文件，个人配置始终保存在仓库以外的应用数据目录。

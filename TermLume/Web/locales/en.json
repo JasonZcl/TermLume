@@ -1,4 +1,9 @@
 {
+  "远端输出超过安全缓冲上限，连接已断开。": "Remote output exceeded the safe buffer limit. The connection was closed.",
+  "终端界面响应超时，为保护内存已断开连接。": "The terminal renderer timed out. The connection was closed to protect memory.",
+  "此服务器已有信任记录，不能通过新增算法重新信任。请核验后在已知主机中显式更新记录。": "This server already has a trusted identity. A new algorithm cannot be trusted as a first connection. Verify it independently and explicitly update Known Hosts.",
+  "已有服务器提供了未信任的密钥算法，连接已阻止。": "An existing server offered an untrusted host-key algorithm. The connection was blocked.",
+  "{0}:{1} 已有服务器信任记录，但本次提供了未信任的密钥算法：{2}。\n\n当前指纹：{3}\n\n连接已阻止，不会作为首次连接重新信任。请联系管理员核验，并在「已知主机」中显式更新该服务器的信任记录。": "{0}:{1} already has a trusted server identity, but it offered an untrusted host-key algorithm: {2}.\n\nReceived fingerprint: {3}\n\nThe connection was blocked. This is not treated as a first connection. Verify the change with your administrator and explicitly update this server's records in Known Hosts.",
   "\n请检查 WebView2 Runtime 与本地工作空间文件。": "\nCheck WebView2 Runtime and your local workspace file.",
   "\r\n\u001b[31m连接未建立：{0}\u001b[0m": "\r\n\u001b[31mConnection failed: {0}\u001b[0m",
   "\r\n\u001b[90m[已手动断开连接]\u001b[0m": "\r\n\u001b[90m[Disconnected by user]\u001b[0m",

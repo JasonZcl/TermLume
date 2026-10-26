@@ -1,6 +1,7 @@
 [CmdletBinding()]
 param(
-    [string]$IsccPath = "$env:LOCALAPPDATA\Programs\Inno Setup 6\ISCC.exe"
+    [string]$IsccPath = "$env:LOCALAPPDATA\Programs\Inno Setup 6\ISCC.exe",
+    [Parameter(Mandatory = $true)][string]$BuildDirectory
 )
 
 $ErrorActionPreference = 'Stop'
@@ -8,19 +9,20 @@ $repository = Split-Path -Parent $PSScriptRoot
 $project = [xml](Get-Content -LiteralPath (Join-Path $repository 'TermLume\TermLume.csproj') -Raw)
 $version = [string]$project.Project.PropertyGroup.Version
 $nextVersion = '{0}.{1}.{2}' -f ([version]$version).Major, ([version]$version).Minor, (([version]$version).Build + 1)
-# 每次使用仓库内的唯一测试目录及独立安装标识，不安装或卸载真实用户版本。
-$qaDirectory = [System.IO.Path]::GetFullPath((Join-Path $repository 'artifacts\qa'))
+# 每次使用构建目录内的唯一测试目录及独立安装标识，不安装或卸载真实用户版本。
+$qaDirectory = [System.IO.Path]::GetFullPath((Join-Path $BuildDirectory 'qa'))
 $root = Join-Path $qaDirectory ("installer-" + [guid]::NewGuid().ToString('N'))
 if (-not $root.StartsWith($qaDirectory + '\', [StringComparison]::OrdinalIgnoreCase)) {
-    throw 'Installer tests must be confined to artifacts/qa.'
+    throw 'Installer tests must be confined to the isolated build directory.'
 }
 $appId = '{' + [guid]::NewGuid().ToString().ToUpperInvariant() + '}'
 $appDirectory = Join-Path $root 'App'
 $dataDirectory = Join-Path $root 'UserData'
 $externalDirectory = Join-Path $root 'ExternalFiles'
 $payload = Join-Path $root 'Payload'
-$bootstrapper = Join-Path $repository 'artifacts\installer-prerequisites\MicrosoftEdgeWebview2Setup.exe'
-$publishedExecutable = Join-Path $repository "artifacts\publish-setup-v$version\TermLume.exe"
+$buildInfo = Get-Content -LiteralPath (Join-Path $BuildDirectory 'build-info.json') -Raw | ConvertFrom-Json
+$bootstrapper = $buildInfo.bootstrapper
+$publishedExecutable = Join-Path $buildInfo.publish 'TermLume.exe'
 if (-not (Test-Path -LiteralPath $publishedExecutable) -or -not (Test-Path -LiteralPath $bootstrapper)) {
     throw 'Run tools/Build-Installer.ps1 first.'
 }
