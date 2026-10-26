@@ -4,4 +4,5 @@
 .vs/
 *.user
 *.suo
-artifacts/
+/artifacts/*
+!/artifacts/TermLume-*-win-x64-Setup.exe
