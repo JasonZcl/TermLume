@@ -57,6 +57,7 @@ function aboutSettings() {
   return ui`<section class="preference-card about-card"><img src="favicon.svg" alt="TermLume 图标"><h3>TermLume<span>0.7.0</span></h3><p>Less noise. More terminal.</p><div class="about-divider"></div><div class="about-facts"><span>桌面平台<strong>Windows</strong></span><span>工作空间<strong>本地存储</strong></span><span>连接方式<strong>SSH / SFTP</strong></span></div><p class="settings-footnote">基于 WPF、WebView2、SSH.NET 与 xterm.js。支持 SSH 终端与 SFTP 文件管理，暂不包含跳板机和云同步。</p></section>`;
 }
 
+// 每次渲染读取当前偏好和语言，界面模板不缓存跨语言的翻译结果。
 function renderSettings() {
   const preferences = preferenceValues();
   const section = settingsSections.find(item => item.id === settingsSection) || settingsSections[0];

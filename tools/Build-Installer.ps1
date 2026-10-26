@@ -29,6 +29,7 @@ if (-not $IsccPath -or -not (Test-Path -LiteralPath $IsccPath -PathType Leaf)) {
     throw 'Install Inno Setup 6.5 or newer, or specify -IsccPath.'
 }
 
+# 发布输出只包含程序文件；真实用户配置始终位于独立的 LocalAppData 目录。
 $artifacts = Join-Path $repository 'artifacts'
 $publishDirectory = Join-Path $artifacts "publish-setup-v$version"
 $prerequisites = Join-Path $artifacts 'installer-prerequisites'
@@ -38,6 +39,7 @@ New-Item -ItemType Directory -Path $artifacts, $prerequisites -Force | Out-Null
 if (-not (Test-Path -LiteralPath $bootstrapper -PathType Leaf)) {
     Invoke-WebRequest -Uri 'https://go.microsoft.com/fwlink/p/?LinkId=2124703' -OutFile $bootstrapper
 }
+# 打包前验证官方引导程序签名，拒绝把来源或完整性无法确认的运行时程序装进安装包。
 $signature = Get-AuthenticodeSignature -LiteralPath $bootstrapper
 if ($signature.Status -ne 'Valid' -or $signature.SignerCertificate.Subject -notmatch 'O=Microsoft Corporation(?:,|$)') {
     throw "The WebView2 bootstrapper must have a valid Microsoft Authenticode signature. Status: $($signature.Status)"
@@ -47,6 +49,7 @@ if ($signature.Status -ne 'Valid' -or $signature.SignerCertificate.Subject -notm
 if ($LASTEXITCODE -ne 0) { throw 'Self-contained publish failed.' }
 Copy-Item -LiteralPath (Join-Path $repository 'README.md') -Destination (Join-Path $publishDirectory 'README.md')
 
+# 防止误把已有工作空间、日志或浏览器用户目录当作发布文件分发。
 $unexpectedData = Get-ChildItem -LiteralPath $publishDirectory -Recurse -Force | Where-Object {
     $_.Name -in @('workspace.json', 'activity-log.json', 'WebView2')
 }

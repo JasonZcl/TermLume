@@ -1,5 +1,6 @@
 'use strict';
 
+// 列表和任务状态保存在页面渲染之外，切换导航或语言时不重置连接与传输。
 const sftpState = {
   sessionId: null, hostId: null, connecting: false, jobs: new Map(), refreshTimer: null, paneRatio: .5,
   local: { listing: null, selected: new Set(), query: '', hidden: false, busy: false, error: '', revision: 0, initialized: false },
@@ -83,6 +84,7 @@ function renderSftpQueue() {
   }).join('') : ui`<div class="sftp-queue-empty">${icon('transfer')}选择文件，点击上传或下载。传输进度会显示在这里。</div>`}</div>`;
 }
 
+// 目录请求带版本号及会话检查，异步返回的旧结果不能覆盖用户当前浏览位置。
 async function sftpLoad(side, path) {
   const pane = sftpState[side], sessionId = sftpState.sessionId;
   if (side === 'local' && path === t('此电脑')) path = 'computer:';
@@ -265,6 +267,7 @@ function onSftpEnded(message) {
   updateFooter(); sftpRenderIfVisible(); toast(pane.error, true);
 }
 
+// 应用内拖放只在当前进程内保留源项目，拖放数据仅携带一次性令牌用于核对。
 let sftpDrag = null;
 const sftpDragType = 'application/x-termlume-files';
 
@@ -334,6 +337,7 @@ document.addEventListener('drop', async event => {
   if (!target) { if (sftpVisible()) toast(sftpState.sessionId ? t('请拖到另一侧的文件列表或文件夹；下载时需选择磁盘或文件夹。') : t('请先连接 SFTP 主机，再拖动文件。'), true); return; }
   try {
     if (target.external) {
+      // 外部拖入只转交真实 File 对象；普通文件和路径边界由原生端再次校验。
       const items = [...event.dataTransfer.items];
       if (items.some(item => item.webkitGetAsEntry?.()?.isDirectory)) throw new Error(t('暂不支持拖入文件夹，请打开文件夹后拖入普通文件。'));
       const files = [...event.dataTransfer.files];

@@ -1,5 +1,6 @@
 namespace TermLume.Models;
 
+/// <summary>持久化的工作空间；连接会话、传输队列和认证凭据不属于保存内容。</summary>
 public sealed class Workspace
 {
     public List<string> Groups { get; set; } = [];
@@ -38,6 +39,7 @@ public sealed class ActivityLogEntry
     public Dictionary<string, string> Details { get; set; } = [];
 }
 
+/// <summary>保存连接参数及私钥路径，不保存登录密码、私钥内容或解锁口令。</summary>
 public sealed class HostProfile
 {
     public string Id { get; set; } = Guid.NewGuid().ToString("N");
@@ -61,6 +63,7 @@ public sealed class Snippet
     public string Command { get; set; } = "";
 }
 
+/// <summary>前后端共享的偏好结构；加载与保存前由 PreferenceSettings 统一规范化。</summary>
 public sealed class Preferences
 {
     public string Language { get; set; } = "zh-CN";

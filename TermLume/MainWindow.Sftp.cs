@@ -9,6 +9,7 @@ namespace TermLume;
 
 public partial class MainWindow
 {
+    // SFTP 拥有独立会话和任务集合，断开文件传输连接不会关闭 SSH 终端。
     private readonly Dictionary<string, SftpSession> sftpSessions = [];
     private readonly Dictionary<string, TransferJob> transferJobs = [];
     private LocalFileBrowser? localFiles;
@@ -35,6 +36,7 @@ public partial class MainWindow
             var previousBrowser = localFiles;
             var browser = LocalFileBrowser.ForComputer();
             var listing = await Task.Run(() => browser.List(browser.Root));
+            // 默认磁盘列表异步返回时，不能覆盖用户刚刚通过对话框选择的目录作用域。
             if (ReferenceEquals(localFiles, previousBrowser)) localFiles = browser;
             return listing;
         }
@@ -150,6 +152,7 @@ public partial class MainWindow
         if (additionalObjects.Count == 0 || additionalObjects.Count > 100 - transferJobs.Count)
             throw new InvalidOperationException("请选择文件；传输队列最多容纳 100 个活动任务。");
         var directory = payload.GetProperty("path").GetString()!;
+        // 真实路径必须来自 WebView2 附加文件对象，不能信任网页 JSON 中声称的本地路径。
         var paths = additionalObjects.Select(item =>
         {
             if (item is not Microsoft.Web.WebView2.Core.CoreWebView2File file)
@@ -165,6 +168,7 @@ public partial class MainWindow
         }).ToArray());
         if (files.Select(file => file.Name).Distinct(StringComparer.Ordinal).Count() != files.Length)
             throw new InvalidDataException("拖入的文件包含重复名称，请分开上传。");
+        // 文件检查期间用户可能已断开连接或增加任务；整批入队前再次核验会话和容量。
         if (shuttingDown || !sftpSessions.TryGetValue(sessionId, out var current) || !ReferenceEquals(session, current))
             throw new OperationCanceledException("SFTP 会话已断开，请重新连接。");
         if (files.Length > 100 - transferJobs.Count) throw new InvalidOperationException("传输队列最多 100 个文件，请等待任务结束。");
@@ -191,6 +195,7 @@ public partial class MainWindow
                 Interlocked.Exchange(ref latestBytes, bytes);
                 Interlocked.Exchange(ref latestTotal, total);
                 var now = timer.ElapsedMilliseconds;
+                // 限制进度通知频率，但完成字节数必须立即发送，避免高频刷新拖慢界面。
                 if (now - lastUpdate < 150 && bytes != total) return;
                 lastUpdate = now;
                 Dispatcher.BeginInvoke(() =>

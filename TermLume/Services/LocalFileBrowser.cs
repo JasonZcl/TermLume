@@ -5,13 +5,16 @@ namespace TermLume.Services;
 public sealed record FileEntry(string Name, string Path, bool Directory, bool Link, long Size, DateTime Modified, bool Drive = false);
 public sealed record FileListing(string Path, string? Parent, IReadOnlyList<FileEntry> Entries, bool Computer = false);
 
+/// <summary>在选定目录或本机磁盘范围内浏览文件，拒绝路径越界和重解析点。</summary>
 public sealed class LocalFileBrowser(string root, bool allDrives = false)
 {
+    // “此电脑”只是显示磁盘列表的虚拟节点，不能作为文件传输目标。
     public const string ComputerPath = "computer:";
     public string Root { get; } = allDrives ? ComputerPath : Path.TrimEndingDirectorySeparator(Path.GetFullPath(root));
 
     public static LocalFileBrowser ForComputer() => new(ComputerPath, true);
 
+    /// <summary>校验原生 WebView2 文件对象提供的路径；调用方不得传入页面自行声明的路径。</summary>
     public static LocalFileBrowser ForDroppedFile(string path)
     {
         if (string.IsNullOrWhiteSpace(path) || !Path.IsPathFullyQualified(path) || path.StartsWith(@"\\?\") || path.StartsWith(@"\\.\"))
@@ -36,6 +39,7 @@ public sealed class LocalFileBrowser(string root, bool allDrives = false)
             !full.StartsWith(Path.EndsInDirectorySeparator(scopeRoot) ? scopeRoot : scopeRoot + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase))
             throw new InvalidDataException("请先选择此文件所在的本地文件夹。");
         var current = full;
+        // 不仅检查最终文件，还检查作用域内的每一级父目录，防止通过目录联接跳出边界。
         while (true)
         {
             if ((File.GetAttributes(current) & FileAttributes.ReparsePoint) != 0)

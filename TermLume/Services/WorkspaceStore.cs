@@ -4,13 +4,16 @@ using TermLume.Models;
 
 namespace TermLume.Services;
 
+/// <summary>读写本地工作空间，并拒绝用默认配置覆盖损坏或不完整的已有文件。</summary>
 public sealed class WorkspaceStore
 {
     public static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web) { WriteIndented = true };
+    // 用户数据与程序目录、版本分离，升级和重新安装时继续读取同一份配置。
     public static string DataDirectory => Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "TermLume");
     private readonly string directory;
     private readonly string filePath;
 
+    // 测试可注入隔离目录，避免访问真实用户工作空间。
     public WorkspaceStore(string? dataDirectory = null)
     {
         directory = dataDirectory ?? DataDirectory;
@@ -45,6 +48,7 @@ public sealed class WorkspaceStore
     {
         MergeGroups(workspace);
         Directory.CreateDirectory(directory);
+        // 先在同一目录写入临时文件，再替换正式文件，减少配置被写到一半的风险。
         var temporaryPath = filePath + ".tmp";
         File.WriteAllText(temporaryPath, JsonSerializer.Serialize(workspace, JsonOptions));
         File.Move(temporaryPath, filePath, true);
@@ -52,6 +56,7 @@ public sealed class WorkspaceStore
 
     private static void MergeGroups(Workspace workspace)
     {
+        // 保留用户创建的空分组，同时兼容只有主机分组字段的旧版配置。
         workspace.Groups = workspace.Groups.Select(group => group.Trim())
             .Concat(workspace.Hosts.Select(host => host.Group))
             .Distinct(StringComparer.Ordinal).ToList();

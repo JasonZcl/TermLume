@@ -7,12 +7,14 @@ using TermLume.Models;
 
 namespace TermLume.Services;
 
+/// <summary>管理单个 SSH PTY、串行输入队列和带渲染确认的输出读取流程。</summary>
 public sealed class SshSession : IDisposable
 {
     private readonly SshClient client;
     private readonly SshAuthentication authentication;
     private readonly CancellationTokenSource lifetime = new();
     private readonly SemaphoreSlim outputAcknowledged = new(0, 1);
+    // 输入和终端尺寸变更共用一个消费者，避免并发访问 ShellStream。
     private readonly Channel<Action<ShellStream>> input = Channel.CreateBounded<Action<ShellStream>>(new BoundedChannelOptions(1024) { SingleReader = true });
     private ShellStream? shell;
     private int disposed;
@@ -56,6 +58,7 @@ public sealed class SshSession : IDisposable
 
     public void Resize(uint columns, uint rows) => input.Writer.TryWrite(stream => stream.ChangeWindowSize(columns, rows, 0, 0));
 
+    /// <summary>由前端完成当前批次终端写入后确认，允许读取线程继续投递输出。</summary>
     public void AcknowledgeOutput()
     {
         if (outputAcknowledged.CurrentCount == 0) outputAcknowledged.Release();
@@ -82,6 +85,7 @@ public sealed class SshSession : IDisposable
         {
             var bytes = new byte[16384];
             var characters = new char[Encoding.UTF8.GetMaxCharCount(bytes.Length)];
+            // 解码器跨读取批次保留状态，避免 UTF-8 字符被网络分块截断时出现乱码。
             var decoder = Encoding.UTF8.GetDecoder();
             while (!lifetime.IsCancellationRequested)
             {
@@ -91,6 +95,7 @@ public sealed class SshSession : IDisposable
                 if (characterCount > 0 && Output is not null)
                 {
                     Output.Invoke(new string(characters, 0, characterCount));
+                    // 等待 xterm.js 消费当前批次，避免持续输出淹没 WebView2 消息队列。
                     outputAcknowledged.Wait(lifetime.Token);
                 }
             }
@@ -108,6 +113,7 @@ public sealed class SshSession : IDisposable
 
     public void Dispose()
     {
+        // 读取结束、输入失败及用户断开都可能触发释放，必须保证清理只执行一次。
         if (Interlocked.Exchange(ref disposed, 1) != 0) return;
         lifetime.Cancel();
         input.Writer.TryComplete();

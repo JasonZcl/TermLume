@@ -86,12 +86,14 @@ async function loadActivityLogs() {
   }
 }
 
+// 合并短时间内的日志变更通知，只在日志页可见时拉取，避免连接事件反复触发重绘。
 function scheduleLogRefresh() {
   logsLoaded = false;
   clearTimeout(logRefreshTimer);
   if (currentView === 'logs' && !activeSession) logRefreshTimer = setTimeout(loadActivityLogs, 200);
 }
 
+// 筛选只改变展示与导出记录集合，不修改原始事件内容或持久化日志。
 function filteredLogs() {
   const query = logFilters.query.trim().toLocaleLowerCase();
   const now = new Date();

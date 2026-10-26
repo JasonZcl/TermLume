@@ -8,6 +8,7 @@ $repository = Split-Path -Parent $PSScriptRoot
 $project = [xml](Get-Content -LiteralPath (Join-Path $repository 'TermLume\TermLume.csproj') -Raw)
 $version = [string]$project.Project.PropertyGroup.Version
 $nextVersion = '{0}.{1}.{2}' -f ([version]$version).Major, ([version]$version).Minor, (([version]$version).Build + 1)
+# 每次使用仓库内的唯一测试目录及独立安装标识，不安装或卸载真实用户版本。
 $qaDirectory = [System.IO.Path]::GetFullPath((Join-Path $repository 'artifacts\qa'))
 $root = Join-Path $qaDirectory ("installer-" + [guid]::NewGuid().ToString('N'))
 if (-not $root.StartsWith($qaDirectory + '\', [StringComparison]::OrdinalIgnoreCase)) {
@@ -55,6 +56,7 @@ function Build-QaInstaller([string]$QaVersion) {
     return Join-Path $root "TermLume-QA-$QaVersion.exe"
 }
 
+# 执行前限定 EXE 必须来自本次测试根目录，避免误启动正式安装器或卸载器。
 function Invoke-QaProcess([string]$Executable, [string]$Arguments, [bool]$ExpectSuccess = $true) {
     $resolved = (Resolve-Path -LiteralPath $Executable).Path
     if (-not $resolved.StartsWith($root + '\', [StringComparison]::OrdinalIgnoreCase)) {

@@ -6,6 +6,7 @@ using TermLume.Models;
 
 namespace TermLume.Services;
 
+/// <summary>串行执行单个 SFTP 连接的目录操作与普通文件传输。</summary>
 public sealed class SftpSession : IDisposable
 {
     private readonly SshAuthentication authentication;
@@ -36,6 +37,7 @@ public sealed class SftpSession : IDisposable
 
     private async Task<T> RunAsync<T>(Func<CancellationToken, Task<T>> operation, CancellationToken cancellation = default)
     {
+        // 排队和执行阶段都同时响应任务取消与会话断开；所有客户端操作共用同一把锁。
         using var linked = CancellationTokenSource.CreateLinkedTokenSource(lifetime.Token, cancellation);
         await gate.WaitAsync(linked.Token).ConfigureAwait(false);
         try
@@ -63,6 +65,7 @@ public sealed class SftpSession : IDisposable
         return new FileListing(current, parent, entries.OrderByDescending(entry => entry.Directory).ThenBy(entry => entry.Name, StringComparer.Ordinal).ToArray());
     });
 
+    // 从父目录枚举原始目录项，避免先解析符号链接后误操作其目标文件。
     private async Task<ISftpFile> GetEntryAsync(string path, CancellationToken token)
     {
         if (!path.StartsWith('/') || path.Split('/').Any(part => part is "." or "..")) throw new InvalidDataException("请使用完整远端路径。");
@@ -105,7 +108,9 @@ public sealed class SftpSession : IDisposable
 
     public Task<bool> TransferAsync(bool upload, string localPath, string remotePath, Action<long, long> progress, CancellationToken cancellation, Action? validateLocal = null) => RunAsync(async token =>
     {
+        // 任务可能排队较久，真正开始传输前再次校验本地路径，而非只依赖入队时检查。
         validateLocal?.Invoke();
+        // 在目标目录写入唯一临时文件，全部写完并检查取消状态后才提交为正式文件。
         var remoteTemporary = Join(remotePath[..Math.Max(1, remotePath.LastIndexOf('/'))], ".termlume-" + Guid.NewGuid().ToString("N") + ".part");
         var localTemporary = Path.Combine(Path.GetDirectoryName(localPath)!, ".termlume-" + Guid.NewGuid().ToString("N") + ".part");
         var temporaryCreated = false;
@@ -122,6 +127,7 @@ public sealed class SftpSession : IDisposable
                     await target.FlushAsync(token).ConfigureAwait(false);
                 }
                 token.ThrowIfCancellationRequested();
+                // 传输期间目标名称可能被其他操作占用，提交前仍需检查是否同名。
                 if (client.Exists(remotePath)) throw new IOException("目标文件在传输期间被创建，已停止提交。");
                 var temporary = await GetEntryAsync(remoteTemporary, token).ConfigureAwait(false);
                 temporary.MoveTo(remotePath);
@@ -148,6 +154,7 @@ public sealed class SftpSession : IDisposable
         {
             if (temporaryCreated)
             {
+                // 失败或取消时尽力清理临时文件；连接丢失等情况可能导致清理失败。
                 try
                 {
                     if (upload) (await GetEntryAsync(remoteTemporary, CancellationToken.None).ConfigureAwait(false)).Delete();
@@ -185,6 +192,7 @@ public sealed class SftpSession : IDisposable
     {
         if (Interlocked.Exchange(ref disposed, 1) != 0) return;
         lifetime.Cancel();
+        // 先通知当前任务退出，再等待客户端空闲后销毁，避免与正在进行的操作并发释放。
         _ = Task.Run(async () =>
         {
             await gate.WaitAsync().ConfigureAwait(false);

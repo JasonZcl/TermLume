@@ -20,6 +20,7 @@ public partial class MainWindow
         public long? Duration => ConnectedAt is { } connected ? Math.Max(0, (long)(DateTimeOffset.UtcNow - connected).TotalSeconds) : null;
     }
 
+    // 调用方只传递事件元数据，不传密码、终端内容、私钥内容或完整传输路径。
     private void Record(string eventName, string message, HostProfile? host = null, string? sessionId = null, string level = "info", string category = "connection", long? duration = null, Dictionary<string, string>? details = null, KnownHostEntry? server = null)
     {
         activityLog.Append(new ActivityLogEntry
@@ -33,6 +34,7 @@ public partial class MainWindow
 
     private void EndSessionActivity(string sessionId, string eventName, string message, string level = "info")
     {
+        // 主动断开和远端断开可能先后到达，同一会话只记录一次结束事件。
         if (!sessionActivity.Remove(sessionId, out var activity)) return;
         activity.Closed = true;
         Record(eventName, message, activity.Host, sessionId, level, duration: activity.Duration);
@@ -52,6 +54,7 @@ public partial class MainWindow
         };
         if (dialog.ShowDialog(this) != true) return false;
         var target = Path.GetFullPath(dialog.FileName);
+        // 导出是独立副本，不能通过保存对话框覆盖应用正在使用的配置或日志。
         if (new[] { "workspace.json", "activity-log.json" }.Any(name => string.Equals(target, Path.Combine(WorkspaceStore.DataDirectory, name), StringComparison.OrdinalIgnoreCase)))
             throw new InvalidDataException("请勿覆盖应用配置或活动日志文件，请选择其他导出位置。");
         File.WriteAllText(dialog.FileName, JsonSerializer.Serialize(new { application = "TermLume", exportedAt = DateTimeOffset.Now, entries }, WorkspaceStore.JsonOptions));

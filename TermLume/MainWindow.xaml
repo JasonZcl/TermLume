@@ -11,6 +11,7 @@
         MinHeight="680" MinWidth="1060" WindowStartupLocation="CenterScreen"
         Background="#1E1E2F" Foreground="#ECEEF2"
         Icon="Assets/TermLume.ico" WindowStyle="None" ResizeMode="CanResize">
+    <!-- 原生窗口负责边框缩放，标题栏按钮和拖动区域由网页界面处理。 -->
     <shell:WindowChrome.WindowChrome>
         <shell:WindowChrome CaptionHeight="0" ResizeBorderThickness="6" GlassFrameThickness="0"
                             CornerRadius="8" UseAeroCaptionButtons="False" />
@@ -18,6 +19,7 @@
     <Grid>
         <Grid.Style>
             <Style TargetType="Grid">
+                <!-- 为原生缩放命中区留出空间，防止 WebView2 吞掉窗口边缘的鼠标事件。 -->
                 <Setter Property="Margin" Value="6" />
                 <Style.Triggers>
                     <DataTrigger Binding="{Binding WindowState, RelativeSource={RelativeSource AncestorType=Window}}" Value="Maximized">

@@ -4,6 +4,7 @@ using TermLume.Models;
 
 namespace TermLume.Services;
 
+/// <summary>线程安全的有界事件日志；记录连接与安全事件，而非终端输入输出。</summary>
 public sealed class ActivityLogStore
 {
     public const int Limit = 2000;
@@ -27,6 +28,7 @@ public sealed class ActivityLogStore
         }
         catch (Exception exception) when (exception is IOException or UnauthorizedAccessException or JsonException or InvalidDataException)
         {
+            // 原日志无法读取时保留原文件；显式清空重建之前，新事件仅存于内存。
             blocked = true;
             error = "日志文件损坏或无法读取，原文件未覆盖。请先备份 activity-log.json，再清空日志以重建。";
         }
@@ -63,6 +65,7 @@ public sealed class ActivityLogStore
     {
         lock (gate)
         {
+            // 必须先成功落盘，再清除内存状态；写入失败不能伪装成已清空。
             Save([]);
             entries.Clear();
             blocked = false;

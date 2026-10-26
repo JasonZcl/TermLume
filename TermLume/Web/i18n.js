@@ -7,6 +7,7 @@ const localeReady = fetch('locales/en.json').then(response => {
   if (!response.ok) throw new Error('Language resources could not be loaded.');
   return response.json();
 }).then(messages => { englishMessages = messages; }).catch(error => { localeLoadError = error; });
+// 只记录启动时的静态界面节点，避免切换语言时误翻译主机名、文件名及其他用户数据。
 const shellTranslations = [];
 const shellWalker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
 while (shellWalker.nextNode()) {
@@ -27,6 +28,7 @@ function t(text, ...values) {
   return values.length ? translated.replace(/\{(\d+)\}/g, (match, index) => index < values.length ? String(values[index]) : match) : translated;
 }
 function msg(strings, ...values) { return t(strings.reduce((text, part, index) => text + part + (index < values.length ? `{${index}}` : ''), ''), ...values); }
+// 此入口仅处理源码中的静态模板片段；动态用户数据不参与字典匹配。
 function uiHtml(markup) {
   if (uiLanguage !== 'en') return markup;
   return markup.split(/([<>"\n])/).map(part => {
@@ -36,6 +38,7 @@ function uiHtml(markup) {
     return part.replace(key, () => translated);
   }).join('');
 }
+// 插值原样保留；需要显示用户数据的调用方仍应先使用 escapeHtml。
 function ui(strings, ...values) { return strings.reduce((text, part, index) => text + uiHtml(part) + (index < values.length ? values[index] : ''), ''); }
 function uiLocale() { return uiLanguage === 'en' ? 'en-US' : 'zh-CN'; }
 function groupLabel(group) { return group === '未分组' ? t('未分组') : group; }

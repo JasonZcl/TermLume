@@ -29,6 +29,7 @@
 #endif
 
 [Setup]
+; 固定产品标识用于识别升级；程序目录与个人数据目录不能随版本号混在一起。
 AppId={{#ProductId}
 AppName={#ProductName}
 AppVersion={#AppVersion}
@@ -141,6 +142,7 @@ var
 function NativeGetFileAttributes(FileName: String): LongWord;
   external 'GetFileAttributesW@kernel32.dll stdcall';
 
+// 正式版只定位当前用户的固定数据目录，测试版仅定位编译时指定的隔离目录。
 function DataDirectory: String;
 begin
 #ifdef QaMode
@@ -182,6 +184,7 @@ begin
   end;
 end;
 
+// 不使用笼统的目录树删除：逐项检查重解析点，保留链接及无法删除的项目并报告失败。
 function DeleteDataTree(Path: String): Boolean;
 var
   Entry: TFindRec;
@@ -242,6 +245,7 @@ begin
     CustomMessage('RuntimeInfo'));
 end;
 
+// 写入程序文件前检查安装边界、降级风险及 WebView2，失败则中止本次安装。
 function PrepareToInstall(var NeedsRestart: Boolean): String;
 var
   InstalledVersion: String;
@@ -281,6 +285,7 @@ begin
   SetPreviousData(PreviousDataKey, 'Version', '{#AppVersion}');
 end;
 
+// 静默卸载默认保留数据，仅显式参数允许清理；交互卸载另有默认保留和二次确认。
 function RequestedSilentDataDeletion: Boolean;
 var
   Index: Integer;
@@ -388,6 +393,7 @@ var
   CleanupComplete: Boolean;
 begin
   if (CurUninstallStep = usPostUninstall) and RemovePersonalData then begin
+    // 移除程序后再次检查运行状态；若应用重新启动则保留数据，避免清理活跃工作空间。
     CleanupComplete := False;
     if not CheckForMutexes('{#ProductMutex}') then
       CleanupComplete := DeleteDataTree(DataDirectory);

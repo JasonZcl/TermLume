@@ -4,8 +4,10 @@ using TermLume.Models;
 
 namespace TermLume.Services;
 
+/// <summary>统一偏好与快捷键的取值规则，原生端不依赖页面校验来保证配置有效。</summary>
 public static class PreferenceSettings
 {
+    // 操作标识和默认绑定须与 Web/preferences.js 同步；绑定使用 KeyboardEvent.code。
     public static readonly IReadOnlyDictionary<string, string> DefaultShortcuts = new Dictionary<string, string>
     {
         ["newHost"] = "Ctrl+KeyN", ["newGroup"] = "Ctrl+Shift+KeyN", ["searchHosts"] = "Ctrl+KeyK",
@@ -39,6 +41,7 @@ public static class PreferenceSettings
         return normalized;
     }
 
+    /// <summary>加载旧配置时容错回退；界面提交时使用严格模式，直接报告无效输入。</summary>
     public static Preferences Normalize(Preferences value, bool strict = false)
     {
         if (value.Language is not ("zh-CN" or "en"))

@@ -5,6 +5,7 @@ namespace TermLume.Services;
 
 public enum HostKeyStatus { Unknown, Trusted, Changed }
 
+/// <summary>按地址、端口和算法管理服务器信任；指纹变化不会自动替换原有信任。</summary>
 public sealed class KnownHostRegistry(Workspace workspace, WorkspaceStore store)
 {
     public static string Endpoint(HostProfile host, string algorithm) => $"[{host.Address.ToLowerInvariant()}]:{host.Port} {algorithm}";
@@ -14,6 +15,7 @@ public sealed class KnownHostRegistry(Workspace workspace, WorkspaceStore store)
         var endpoint = Endpoint(host, algorithm);
         if (!workspace.KnownHosts.TryGetValue(endpoint, out var saved)) return HostKeyStatus.Unknown;
         var existing = workspace.KnownHostDetails.GetValueOrDefault(endpoint);
+        // 使用新的元数据对象，保证保存失败时仍能恢复未被修改的旧记录。
         var metadata = new KnownHostMetadata
         {
             FirstTrustedAt = existing?.FirstTrustedAt, LastVerifiedAt = existing?.LastVerifiedAt,
@@ -34,6 +36,7 @@ public sealed class KnownHostRegistry(Workspace workspace, WorkspaceStore store)
         return status;
     }
 
+    /// <summary>仅在用户确认首次信任后调用；已有指纹必须先显式移除，不能覆盖。</summary>
     public void Trust(HostProfile host, string algorithm, string fingerprint)
     {
         var endpoint = Endpoint(host, algorithm);
@@ -59,6 +62,7 @@ public sealed class KnownHostRegistry(Workspace workspace, WorkspaceStore store)
         try { store.Save(workspace); }
         catch
         {
+            // 磁盘持久化失败时同步回滚内存，避免界面误以为信任变更已经保存。
             if (previousFingerprint is null) workspace.KnownHosts.Remove(endpoint);
             else workspace.KnownHosts[endpoint] = previousFingerprint;
             if (previousMetadata is null) workspace.KnownHostDetails.Remove(endpoint);

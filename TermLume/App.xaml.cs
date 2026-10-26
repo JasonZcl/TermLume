@@ -14,6 +14,7 @@ public partial class App : Application
 
     protected override void OnStartup(StartupEventArgs args)
     {
+        // 此名称须与安装器 AppMutex 保持一致，让安装 / 卸载流程识别正在运行的实例。
         instanceMutex = new Mutex(true, "Local\\TermLume.Workspace", out ownsMutex);
         if (!ownsMutex)
         {
@@ -28,6 +29,7 @@ public partial class App : Application
 
     protected override void OnExit(ExitEventArgs args)
     {
+        // 未取得所有权的第二个实例只能释放句柄，不能释放其他实例持有的互斥量。
         if (ownsMutex) instanceMutex?.ReleaseMutex();
         instanceMutex?.Dispose();
         base.OnExit(args);

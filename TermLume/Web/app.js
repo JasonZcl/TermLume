@@ -1,6 +1,7 @@
 'use strict';
 
 const $ = selector => document.querySelector(selector);
+// 用户提供的名称、路径和备注插入 HTML 前必须转义，不能作为可信界面模板处理。
 const escapeHtml = value => String(value ?? '').replace(/[&<>"']/g, character => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[character]);
 const icon = name => `<svg class="icon" aria-hidden="true"><use href="#i-${name}"/></svg>`;
 const bridge = window.chrome?.webview;
@@ -190,10 +191,12 @@ document.addEventListener('dblclick', event => {
   if (card && !event.target.closest('button') && ready) connectHost(card.dataset.id).catch(error => toast(error.message, true));
 });
 
+// 用请求 ID 关联异步回复；附加文件对象走原生桥接，不把真实文件路径交给页面声明。
 function request(op, payload = {}, additionalObjects = null) {
   if (!bridge) return Promise.reject(new Error(t('请从 TermLume 桌面应用打开此工作空间。')));
   const id = crypto.randomUUID();
   return new Promise((resolve, reject) => {
+    // 超时只结束页面等待，不代表原生连接或传输已取消；取消须发送相应操作。
     const timeout = setTimeout(() => { pending.delete(id); reject(new Error(t('操作等待超时，请检查连接状态。'))); }, ['connect', 'exportLogs'].includes(op) || op.startsWith('sftp') ? 600000 : 30000);
     pending.set(id, { resolve, reject, timeout });
     try {
@@ -226,6 +229,7 @@ bridge?.addEventListener('message', event => {
     if (message.ok) callback.resolve(message.result);
     else callback.reject(new Error(message.error));
   } else if (message.type === 'output') {
+    // 在 xterm.js 完成写入后确认，配合原生读取线程形成输出背压。
     sessions.get(message.sessionId)?.terminal.write(message.data, () => request('ack', { sessionId: message.sessionId }).catch(() => {}));
   } else if (message.type === 'connected') {
     const session = sessions.get(message.sessionId);

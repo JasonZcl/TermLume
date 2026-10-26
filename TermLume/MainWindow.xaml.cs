@@ -42,6 +42,7 @@ public partial class MainWindow : Window
             var environment = await CoreWebView2Environment.CreateAsync(null, Path.Combine(WorkspaceStore.DataDirectory, "WebView2"));
             await Browser.EnsureCoreWebView2Async(environment);
             var core = Browser.CoreWebView2;
+            // 虚拟域名仅映射安装目录内的界面资源；后续导航、弹窗、权限和浏览器下载均受限制。
             core.SetVirtualHostNameToFolderMapping("termlume.local", Path.Combine(AppContext.BaseDirectory, "Web"), CoreWebView2HostResourceAccessKind.DenyCors);
             core.Settings.AreDevToolsEnabled = false;
             core.Settings.AreDefaultContextMenusEnabled = false;
@@ -76,6 +77,7 @@ public partial class MainWindow : Window
 
     private async void OnMessage(object? sender, CoreWebView2WebMessageReceivedEventArgs args)
     {
+        // 原生能力只对应用自身页面开放；各操作仍须在原生端校验参数和文件路径。
         if (args.Source != AppOrigin + "/index.html" || shuttingDown) return;
         string? requestId = null;
         try
@@ -219,6 +221,7 @@ public partial class MainWindow : Window
         preferences = PreferenceSettings.Normalize(preferences, strict: true);
         var previous = workspace.Preferences;
         workspace.Preferences = preferences;
+        // 先确认持久化成功，再切换原生语言；失败时恢复旧偏好，避免界面与磁盘状态不一致。
         try { store.Save(workspace); }
         catch { workspace.Preferences = previous; throw; }
         Localization.Language = preferences.Language;
@@ -297,6 +300,7 @@ public partial class MainWindow : Window
         }
     }
 
+    // SSH 与 SFTP 共用身份核验；首次信任需用户确认，已保存指纹变化时直接阻止连接。
     private bool VerifyHostKey(HostProfile host, HostKeyEventArgs key, string sessionId)
     {
         if (shuttingDown) return false;
@@ -366,6 +370,7 @@ public partial class MainWindow : Window
     private static bool Copy(string text) { Clipboard.SetText(text); return true; }
     private void DispatchEvent(object message)
     {
+        // SSH 事件来自后台线程，WebView2 消息发送必须切回窗口所属的 UI 线程。
         if (!shuttingDown) Dispatcher.Invoke(() => Post(message));
     }
     private void Post(object message)
@@ -375,6 +380,7 @@ public partial class MainWindow : Window
 
     private void OnClosing(object? sender, CancelEventArgs args)
     {
+        // 有活动连接或传输时默认不退出；只有用户确认后才取消任务并释放会话。
         if ((sessions.Count > 0 || sftpSessions.Count > 0 || transferJobs.Count > 0) && MessageBox.Show(this, Localization.Text("仍有 SSH / SFTP 连接或文件传输正在运行，确定取消传输、断开全部连接并退出吗？"), Localization.Text("退出 TermLume"), MessageBoxButton.YesNo, MessageBoxImage.Question, MessageBoxResult.No) != MessageBoxResult.Yes)
         {
             args.Cancel = true;

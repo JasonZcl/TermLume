@@ -40,6 +40,7 @@ function terminalOptions() {
   return { fontSize: preferences.fontSize, fontFamily: terminalFonts[preferences.fontFamily], lineHeight: preferences.lineHeight, scrollback: preferences.scrollback, cursorStyle: preferences.cursorStyle, cursorBlink: preferences.cursorBlink, theme: terminalTheme() };
 }
 
+// 更新已有终端对象的选项而非重建终端，切换外观或语言不会清空输出或断开连接。
 function applyPreferences() {
   preferenceRuntimeReady = true;
   workspace.preferences = preferenceValues();
@@ -56,6 +57,7 @@ function applyPreferences() {
   if (languageChanged) { renderSidebar(); renderTabs(); if (activeSession) updateTerminalToolbar(); else if (currentView !== 'settings') renderPage(); }
 }
 
+// 串行保存，后一个改动基于前一个已保存结果合并；原生确认成功后才更新界面状态。
 function updatePreferences(patch) {
   preferencesPending++;
   preferencesError = '';
@@ -123,6 +125,7 @@ function normalizeShortcut(value) {
   return binding;
 }
 
+// 按物理键位保存，避免输入法或键盘字符布局改变快捷键标识；原生端还会再次校验。
 function bindingFromEvent(event) {
   if (event.metaKey || event.getModifierState?.('AltGraph')) throw new Error(t('不支持 Windows 键或 AltGr，请使用 Ctrl / Alt 组合或功能键。'));
   return normalizeShortcut([event.ctrlKey && 'Ctrl', event.altKey && 'Alt', event.shiftKey && 'Shift', event.code].filter(Boolean).join('+'));
