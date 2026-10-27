@@ -1,6 +1,7 @@
 'use strict';
 
 const shortcutDefinitions = [
+  { id: 'snippets', get label() { return t('打开 / 关闭命令片段'); }, get description() { return t('在当前终端查找并使用保存的命令'); }, get group() { return t('终端'); }, binding: 'Ctrl+Shift+KeyS', terminalOnly: true },
   { id: 'newHost', get label() { return t('新建主机'); }, get description() { return t('打开主机配置表单'); }, get group() { return t('工作空间'); }, binding: 'Ctrl+KeyN' },
   { id: 'newGroup', get label() { return t('新建分组'); }, get description() { return t('创建一个独立的空分组'); }, get group() { return t('工作空间'); }, binding: 'Ctrl+Shift+KeyN' },
   { id: 'searchHosts', get label() { return t('搜索与快速连接'); }, get description() { return t('返回主机列表并聚焦搜索框'); }, get group() { return t('工作空间'); }, binding: 'Ctrl+KeyK' },
@@ -175,6 +176,7 @@ async function runShortcut(action) {
     case 'copy': if (session?.terminal.hasSelection()) await request('copy', { text: session.terminal.getSelection() }); break;
     case 'paste': if (session?.status === 'connected') session.terminal.paste(await request('paste')); break;
     case 'clearTerminal': session?.terminal.clear(); break;
+    case 'snippets': toggleSnippets(); break;
     case 'toggleSidebar': {
       const collapsed = document.body.classList.toggle('sidebar-collapsed');
       $('.sidebar-toggle')?.setAttribute('aria-expanded', String(!collapsed));

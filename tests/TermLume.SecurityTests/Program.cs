@@ -31,6 +31,13 @@ async Task RejectAsync(Func<Task> action, string description)
 }
 Check(Environment.Version == new Version(10, 0, 14), "Regressions execute on the pinned .NET 10.0.14 runtime");
 
+var freshPreferences = PreferenceSettings.Normalize(new Preferences());
+Check(freshPreferences.Shortcuts["snippets"] == "Ctrl+Shift+KeyS", "New profiles receive the snippets shortcut");
+var upgradedPreferences = PreferenceSettings.Normalize(new Preferences { Shortcuts = new() { ["newHost"] = "Ctrl+Shift+KeyS", ["searchHosts"] = "Ctrl+Alt+KeyK" } });
+Check(upgradedPreferences.Shortcuts["snippets"] == "" && upgradedPreferences.Shortcuts["newHost"] == "Ctrl+Shift+KeyS" && upgradedPreferences.Shortcuts["searchHosts"] == "Ctrl+Alt+KeyK", "Adding snippets never resets conflicting legacy custom shortcuts");
+var disabledSnippetShortcut = PreferenceSettings.Normalize(new Preferences { Shortcuts = new() { ["snippets"] = "" } }, strict: true);
+Check(disabledSnippetShortcut.Shortcuts["snippets"] == "", "Users can disable the snippets shortcut");
+
 var store = new WorkspaceStore(Path.Combine(root, "workspace"));
 var workspace = new Workspace();
 var registry = new KnownHostRegistry(workspace, store);

@@ -77,13 +77,24 @@ function Install-Qa([string]$Setup, [string]$Name, [bool]$ExpectSuccess = $true,
     Invoke-QaProcess $Setup "/VERYSILENT /SUPPRESSMSGBOXES /NORESTART /SP- /NOICONS /LANG=english /DIR=`"$Target`" /LOG=`"$root\$Name.log`"" $ExpectSuccess
 }
 
-function Uninstall-Qa([string]$Name, [bool]$DeleteData = $false, [bool]$ExpectSuccess = $true) {
-    $arguments = "/VERYSILENT /SUPPRESSMSGBOXES /NORESTART /LOG=`"$root\$Name.log`""
-    if ($DeleteData) { $arguments += ' /DELETEUSERDATA' }
-    Invoke-QaProcess (Join-Path $appDirectory 'unins000.exe') $arguments $ExpectSuccess
+function Get-QaUninstaller {
+    $command = (Get-ItemProperty -LiteralPath $registryPath).UninstallString
+    if ($command -notmatch '^"([^"\r\n]+\\unins[0-9]{3}\.exe)"(?: /LOG)?$') { throw 'Unexpected QA uninstall command.' }
+    $executable = [System.IO.Path]::GetFullPath($Matches[1])
+    if (-not $executable.StartsWith($root + '\', [StringComparison]::OrdinalIgnoreCase)) { throw 'QA uninstall command escapes the isolated directory.' }
+    return $executable
 }
 
+function Uninstall-Qa([string]$Name, [bool]$DeleteData = $false, [bool]$ExpectSuccess = $true, [bool]$KeepData = $false) {
+    $arguments = "/VERYSILENT /SUPPRESSMSGBOXES /NORESTART /LOG=`"$root\$Name.log`""
+    if ($DeleteData) { $arguments += ' /DELETEUSERDATA' }
+    if ($KeepData) { $arguments += ' /KEEPUSERDATA' }
+    Invoke-QaProcess (Get-QaUninstaller) $arguments $ExpectSuccess
+}
+
+[System.IO.File]::WriteAllText((Join-Path $payload 'obsolete-program-file.txt'), 'Owned only by the previous version')
 $setup = Build-QaInstaller $version
+Remove-Item -LiteralPath (Join-Path $payload 'obsolete-program-file.txt')
 $upgrade = Build-QaInstaller $nextVersion
 Write-SyntheticData
 Install-Qa $setup 'first-install'
@@ -94,17 +105,60 @@ Assert-Condition (Test-Path -LiteralPath $registryPath) 'Only the unique QA prod
 Assert-SyntheticData
 Install-Qa $setup 'reinstall'
 Assert-SyntheticData
+Assert-Condition ((Get-Content -LiteralPath (Join-Path $root 'reinstall.log') -Raw) -match 'Previous TermLume version uninstalled; personal data retained') 'Same-version reinstall automatically uninstalls the previous program without deleting data'
 Install-Qa $upgrade 'upgrade'
 Assert-SyntheticData
+Assert-Condition (-not (Test-Path -LiteralPath (Join-Path $appDirectory 'obsolete-program-file.txt'))) 'Automatic upgrade removes obsolete installer-owned program files'
+Assert-Condition ((Get-Content -LiteralPath (Join-Path $root 'upgrade.log') -Raw) -match 'Previous TermLume version uninstalled; personal data retained') 'Upgrade waits for successful automatic removal of the previous version'
 Assert-Condition ((Get-ItemProperty -LiteralPath $registryPath).DisplayVersion -eq $nextVersion) 'Upgrade reuses the product identity and updates the version'
 Install-Qa $setup 'downgrade-blocked' $false
 Assert-Condition ((Get-Content -LiteralPath (Join-Path $root 'downgrade-blocked.log') -Raw) -match 'A newer version') 'Older installer is rejected without overwriting data'
+Install-Qa $setup 'downgrade-relocation-blocked' $false (Join-Path $root 'OlderVersionFolder')
+Assert-Condition ((Get-ItemProperty -LiteralPath $registryPath).DisplayVersion -eq $nextVersion) 'Changing installation folder cannot bypass downgrade protection or uninstall the newer version'
 Install-Qa $upgrade 'data-path-blocked' $false $dataDirectory
 Assert-Condition ((Get-Content -LiteralPath (Join-Path $root 'data-path-blocked.log') -Raw) -match 'Choose a separate program folder') 'Installing over the data directory is rejected'
 $appLink = Join-Path $root 'LinkedInstallFolder'
 New-Item -ItemType Junction -Path $appLink -Value $externalDirectory | Out-Null
 Install-Qa $upgrade 'linked-path-blocked' $false $appLink
 Assert-Condition (-not (Test-Path -LiteralPath (Join-Path $externalDirectory 'TermLume.exe'))) 'Program installation does not follow directory junctions'
+
+$originalUninstallCommand = (Get-ItemProperty -LiteralPath $registryPath).UninstallString
+try {
+    Set-ItemProperty -LiteralPath $registryPath -Name UninstallString -Value ('"' + (Join-Path $externalDirectory 'unexpected.exe') + '"')
+    Install-Qa $upgrade 'invalid-uninstaller-blocked' $false
+    Assert-Condition (Test-Path -LiteralPath (Join-Path $appDirectory 'TermLume.exe')) 'An unexpected registered uninstall command is rejected without removing the existing program'
+}
+finally { Set-ItemProperty -LiteralPath $registryPath -Name UninstallString -Value $originalUninstallCommand }
+
+$uninstaller = Get-QaUninstaller
+$savedUninstaller = $uninstaller + '.saved'
+if (-not ([System.IO.Path]::GetFullPath($savedUninstaller)).StartsWith($root + '\', [StringComparison]::OrdinalIgnoreCase)) { throw 'Unsafe QA uninstaller move.' }
+Move-Item -LiteralPath $uninstaller -Destination $savedUninstaller
+try {
+    Install-Qa $upgrade 'missing-uninstaller-blocked' $false
+    Assert-Condition ((Test-Path -LiteralPath (Join-Path $appDirectory 'TermLume.exe')) -and ((Get-ItemProperty -LiteralPath $registryPath).DisplayVersion -eq $nextVersion)) 'A missing old uninstaller stops installation without overwriting the old version'
+}
+finally { Move-Item -LiteralPath $savedUninstaller -Destination $uninstaller }
+
+$uninstallData = [System.IO.Path]::ChangeExtension((Get-QaUninstaller), '.dat')
+$savedUninstallData = $uninstallData + '.saved'
+if (-not ([System.IO.Path]::GetFullPath($savedUninstallData)).StartsWith($root + '\', [StringComparison]::OrdinalIgnoreCase)) { throw 'Unsafe QA uninstall data move.' }
+Move-Item -LiteralPath $uninstallData -Destination $savedUninstallData
+try {
+    Install-Qa $upgrade 'failed-uninstaller-blocked' $false
+    Assert-Condition ((Test-Path -LiteralPath (Join-Path $appDirectory 'TermLume.exe')) -and ((Get-Content -LiteralPath (Join-Path $root 'failed-uninstaller-blocked.log') -Raw) -match 'previous program could not be completely uninstalled')) 'Old uninstaller failure stops installation rather than mixing program versions'
+    Assert-SyntheticData
+}
+finally { Move-Item -LiteralPath $savedUninstallData -Destination $uninstallData }
+
+$previousAppDirectory = $appDirectory
+$relocatedDirectory = Join-Path $root 'RelocatedApp'
+[System.IO.File]::WriteAllText((Join-Path $previousAppDirectory 'keep-user-file.txt'), 'Not managed by the installer')
+Install-Qa $upgrade 'relocated-upgrade' $true $relocatedDirectory
+Assert-Condition ((-not (Test-Path -LiteralPath (Join-Path $previousAppDirectory 'TermLume.exe'))) -and (Test-Path -LiteralPath (Join-Path $relocatedDirectory 'TermLume.exe'))) 'Changing installation folder uninstalls the previous program from its registered directory'
+Assert-Condition (Test-Path -LiteralPath (Join-Path $previousAppDirectory 'keep-user-file.txt')) 'Automatic upgrade keeps unknown files in the previous program directory'
+$appDirectory = $relocatedDirectory
+Assert-SyntheticData
 
 $createdMutex = $false
 $mutex = [System.Threading.Mutex]::new($true, 'Local\TermLume.InstallerQA', [ref]$createdMutex)
@@ -129,6 +183,12 @@ Install-Qa $upgrade 'reinstall-after-retain'
 Assert-SyntheticData
 Uninstall-Qa 'uninstall-delete' $true
 Assert-Condition (-not (Test-Path -LiteralPath $dataDirectory)) 'Explicit delete-data uninstall removes the whole ordinary application data tree'
+
+Write-SyntheticData
+Install-Qa $upgrade 'keep-data-override-install'
+Uninstall-Qa 'keep-data-override-uninstall' $true $true $true
+Assert-SyntheticData
+Assert-Condition (Test-Path -LiteralPath $dataDirectory) 'KEEPUSERDATA overrides conflicting delete-data flags during automatic removal'
 
 Write-SyntheticData
 New-Item -ItemType Junction -Path (Join-Path $dataDirectory 'external-link') -Value $externalDirectory | Out-Null

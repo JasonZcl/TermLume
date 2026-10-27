@@ -1,5 +1,5 @@
 #ifndef AppVersion
-  #define AppVersion "0.7.1"
+  #define AppVersion "0.7.3"
 #endif
 #ifndef PublishDir
   #error PublishDir is required
@@ -90,12 +90,12 @@ Filename: "{app}\TermLume.exe"; Description: "{cm:LaunchProgram,TermLume}"; Flag
 [CustomMessages]
 chinesesimplified.UninstallShortcut=卸载 TermLume
 english.UninstallShortcut=Uninstall TermLume
-chinesesimplified.DataInfo=升级或重新安装只更新程序文件，不覆盖已有主机、分组、信任指纹、日志和设置。%n%n数据目录：%1%n%n软件目录中包含 unins000.exe，可随时卸载并选择保留或删除应用数据。私钥原文件、SFTP 本地文件和远程文件不属于清理范围。
-english.DataInfo=Upgrades and reinstalls only update program files. Existing hosts, groups, trusted fingerprints, logs and settings are preserved.%n%nData folder: %1%n%nRun unins000.exe in the installation folder to uninstall and choose whether to keep application data. Original private keys, local SFTP files and remote files are not removed.
+chinesesimplified.DataInfo=升级或重新安装时，会自动卸载之前的程序版本，再安装新版本。自动卸载始终保留已有主机、分组、信任指纹、日志、设置和缓存；无需手动卸载。%n%n数据目录：%1%n%n软件目录中包含 unins*.exe，手动卸载时可选择保留或删除应用数据。私钥原文件、SFTP 本地文件和远程文件不属于清理范围。
+english.DataInfo=Upgrades and reinstalls automatically uninstall the previous program version before installing this one. Automatic removal always keeps hosts, groups, trusted fingerprints, logs, settings and cache. No manual uninstall is needed.%n%nData folder: %1%n%nRun unins*.exe in the installation folder to manually uninstall and choose whether to keep application data. Original private keys, local SFTP files and remote files are not removed.
 chinesesimplified.DataPageTitle=安装与数据
 english.DataPageTitle=Installation and data
-chinesesimplified.DataPageDescription=程序与个人数据分开存放，升级无需先卸载。
-english.DataPageDescription=Program files and personal data are stored separately. No uninstall is needed to upgrade.
+chinesesimplified.DataPageDescription=自动替换旧版程序，保留已有个人数据。
+english.DataPageDescription=Automatically replace the previous program and keep personal data.
 chinesesimplified.RuntimeInfo=安装包已内置 .NET，无需另外安装 .NET Desktop Runtime。若未检测到 Microsoft Edge WebView2 Runtime，下一步会联网安装 Microsoft 官方运行时；已有运行时则跳过。无法联网时，请先安装 WebView2 Evergreen Runtime 后重试。
 english.RuntimeInfo=The .NET runtime is included; no separate .NET Desktop Runtime installation is needed. If Microsoft Edge WebView2 Runtime is missing, Setup will install it online from Microsoft. If offline, install the WebView2 Evergreen Runtime first and try again.
 chinesesimplified.RuntimeInstalling=正在安装 Microsoft Edge WebView2 Runtime，请稍候……
@@ -106,6 +106,14 @@ chinesesimplified.UnsafeInstallPath=请将程序安装到独立文件夹，不�
 english.UnsafeInstallPath=Choose a separate program folder. It must not be the data folder, inside it, or a parent of it: %1
 chinesesimplified.DowngradeBlocked=已安装较新版本（%1）。为避免旧版程序修改新版数据，已停止安装。请使用相同或更新的安装包。
 english.DowngradeBlocked=A newer version (%1) is installed. Setup stopped to prevent older software from changing newer data. Use the same or a newer installer.
+chinesesimplified.PreviousInstallInvalid=检测到旧版安装记录，但卸载器缺失、安装路径不安全或记录不完整。为保护现有文件，已停止安装。请先修复或手动卸载旧版（选择保留个人数据），再运行此安装包。
+english.PreviousInstallInvalid=A previous installation was found, but its uninstaller is missing, its path is unsafe or its registration is incomplete. Setup stopped to protect existing files. Repair or manually uninstall that version while keeping personal data, then retry.
+chinesesimplified.PreviousUninstallRunning=正在卸载旧版程序（保留个人数据），请稍候……
+english.PreviousUninstallRunning=Uninstalling the previous program (keeping personal data). Please wait...
+chinesesimplified.PreviousUninstallFailed=未能完整卸载旧版程序，已停止安装新版本。个人数据不会主动清理。请关闭相关程序后重试，或手动卸载旧版并保留个人数据。退出代码：%1
+english.PreviousUninstallFailed=The previous program could not be completely uninstalled. Installation stopped. Personal data is not intentionally removed. Close related programs and retry, or uninstall the previous version manually while keeping personal data. Exit code: %1
+chinesesimplified.CloseBeforeUpgrade=TermLume 仍在运行。请先保存远端工作并关闭程序，再安装新版本；安装器不会强制断开连接。
+english.CloseBeforeUpgrade=TermLume is still running. Save remote work and close the application before installing. Setup will not forcibly disconnect sessions.
 chinesesimplified.UninstallTitle=卸载 TermLume
 english.UninstallTitle=Uninstall TermLume
 chinesesimplified.UninstallDescription=请选择个人数据的处理方式。两种方式都会移除已安装的程序文件。
@@ -135,6 +143,7 @@ const
   FileAttributeReparsePoint = $400;
   InvalidFileAttributes = $FFFFFFFF;
   WebViewRegistryKey = 'Software\Microsoft\EdgeUpdate\Clients\{F3017226-FE2A-4295-8BDF-00C3A9A7E4C5}';
+  ProductUninstallKey = 'Software\Microsoft\Windows\CurrentVersion\Uninstall\{#ProductId}_is1';
 
 var
   RemovePersonalData: Boolean;
@@ -245,12 +254,69 @@ begin
     CustomMessage('RuntimeInfo'));
 end;
 
+function ReadPreviousInstallation(var Folder, Uninstaller, Version: String): Boolean;
+var
+  RegisteredCommand, Arguments, Name: String;
+  QuoteEnd, Index: Integer;
+begin
+  Result := RegQueryStringValue(HKCU64, ProductUninstallKey, 'InstallLocation', Folder) and
+    RegQueryStringValue(HKCU64, ProductUninstallKey, 'UninstallString', RegisteredCommand) and
+    RegQueryStringValue(HKCU64, ProductUninstallKey, 'DisplayVersion', Version);
+  if not Result then Exit;
+  Result := (Folder <> '') and (Version <> '');
+  if not Result then Exit;
+  Folder := NormalizedPath(Folder);
+  RegisteredCommand := Trim(RegisteredCommand);
+  Result := Copy(RegisteredCommand, 1, 1) = '"';
+  if not Result then Exit;
+  QuoteEnd := Pos('"', Copy(RegisteredCommand, 2, Length(RegisteredCommand)));
+  Result := QuoteEnd > 1;
+  if not Result then Exit;
+  Uninstaller := Copy(RegisteredCommand, 2, QuoteEnd - 1);
+  Arguments := Trim(Copy(RegisteredCommand, QuoteEnd + 2, Length(RegisteredCommand)));
+  Name := ExtractFileName(Uninstaller);
+  Result := (Length(Name) = 12) and (CompareText(Copy(Name, 1, 5), 'unins') = 0) and
+    (CompareText(Copy(Name, 9, 4), '.exe') = 0);
+  if not Result then Exit;
+  for Index := 6 to 8 do
+    if (Name[Index] < '0') or (Name[Index] > '9') then begin
+      Result := False;
+      Exit;
+    end;
+  Result := ((Arguments = '') or (CompareText(Arguments, '/LOG') = 0)) and
+    (CompareText(NormalizedPath(Uninstaller), AddBackslash(Folder) + Name) = 0) and
+    (not ContainsPath(DataDirectory, Folder)) and
+    (not ContainsPath(Folder, DataDirectory)) and
+    (not PathHasReparsePoint(Uninstaller)) and FileExists(Uninstaller);
+end;
+
+function UninstallPreviousVersion(Folder, Uninstaller: String): String;
+var
+  ExitCode: Integer;
+begin
+  Result := '';
+  WizardForm.StatusLabel.Caption := CustomMessage('PreviousUninstallRunning');
+  Log('Automatically uninstalling previous TermLume version (keeping personal data).');
+  ExitCode := -1;
+  if not Exec(Uninstaller, '/VERYSILENT /SUPPRESSMSGBOXES /NORESTART /KEEPUSERDATA',
+    Folder, SW_HIDE, ewWaitUntilTerminated, ExitCode) then begin
+    Result := FmtMessage(CustomMessage('PreviousUninstallFailed'), [IntToStr(ExitCode)]);
+    Exit;
+  end;
+  if (ExitCode <> 0) or RegKeyExists(HKCU64, ProductUninstallKey) or
+    FileExists(AddBackslash(Folder) + 'TermLume.exe') then
+    Result := FmtMessage(CustomMessage('PreviousUninstallFailed'), [IntToStr(ExitCode)])
+  else
+    Log('Previous TermLume version uninstalled; personal data retained.');
+end;
+
 // 写入程序文件前检查安装边界、降级风险及 WebView2，失败则中止本次安装。
 function PrepareToInstall(var NeedsRestart: Boolean): String;
 var
-  InstalledVersion: String;
+  InstalledVersion, PreviousFolder, PreviousUninstaller: String;
   CurrentVersion, PreviousVersion: Int64;
   ExitCode: Integer;
+  HasPreviousInstallation: Boolean;
 begin
   Result := '';
   if ContainsPath(DataDirectory, ExpandConstant('{app}')) or
@@ -259,7 +325,22 @@ begin
     Result := FmtMessage(CustomMessage('UnsafeInstallPath'), [DataDirectory]);
     Exit;
   end;
-  InstalledVersion := GetPreviousData('Version', '');
+  if CheckForMutexes('{#ProductMutex}') then begin
+    Result := CustomMessage('CloseBeforeUpgrade');
+    Exit;
+  end;
+  HasPreviousInstallation := RegKeyExists(HKCU64, ProductUninstallKey);
+  if HasPreviousInstallation then begin
+    if not ReadPreviousInstallation(PreviousFolder, PreviousUninstaller, InstalledVersion) then begin
+      Result := CustomMessage('PreviousInstallInvalid');
+      Exit;
+    end;
+    if not StrToVersion(InstalledVersion, PreviousVersion) then begin
+      Result := CustomMessage('PreviousInstallInvalid');
+      Exit;
+    end;
+  end
+  else InstalledVersion := GetPreviousData('Version', '');
   if InstalledVersion = '' then
     GetVersionNumbersString(ExpandConstant('{app}\TermLume.exe'), InstalledVersion);
   if StrToVersion('{#AppVersion}', CurrentVersion) and
@@ -272,12 +353,15 @@ begin
     WizardForm.StatusLabel.Caption := CustomMessage('RuntimeInstalling');
     ExtractTemporaryFile('MicrosoftEdgeWebview2Setup.exe');
     ExitCode := -1;
-    if Exec(ExpandConstant('{tmp}\MicrosoftEdgeWebview2Setup.exe'),
-      '/silent /install', '', SW_HIDE, ewWaitUntilTerminated, ExitCode) then begin
-      if HasWebViewRuntime then Exit;
+    if not Exec(ExpandConstant('{tmp}\MicrosoftEdgeWebview2Setup.exe'),
+      '/silent /install', '', SW_HIDE, ewWaitUntilTerminated, ExitCode) or
+      (not HasWebViewRuntime) then begin
+      Result := FmtMessage(CustomMessage('RuntimeFailed'), [IntToStr(ExitCode)]);
+      Exit;
     end;
-    Result := FmtMessage(CustomMessage('RuntimeFailed'), [IntToStr(ExitCode)]);
   end;
+  if HasPreviousInstallation then
+    Result := UninstallPreviousVersion(PreviousFolder, PreviousUninstaller);
 end;
 
 procedure RegisterPreviousData(PreviousDataKey: Integer);
@@ -291,6 +375,8 @@ var
   Index: Integer;
 begin
   Result := False;
+  for Index := 1 to ParamCount do
+    if CompareText(ParamStr(Index), '/KEEPUSERDATA') = 0 then Exit;
   for Index := 1 to ParamCount do
     if CompareText(ParamStr(Index), '/DELETEUSERDATA') = 0 then
       Result := True;

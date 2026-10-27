@@ -15,6 +15,7 @@ public static class PreferenceSettings
         ["closeTab"] = "Ctrl+Shift+KeyW", ["nextTab"] = "Ctrl+Tab", ["previousTab"] = "Ctrl+Shift+Tab",
         ["reconnect"] = "Ctrl+Shift+KeyR", ["copy"] = "Ctrl+Shift+KeyC", ["paste"] = "Ctrl+Shift+KeyV",
         ["clearTerminal"] = "Ctrl+Shift+KeyL", ["toggleSidebar"] = "Ctrl+Shift+KeyB",
+        ["snippets"] = "Ctrl+Shift+KeyS",
         ["fontIncrease"] = "Ctrl+Equal", ["fontDecrease"] = "Ctrl+Minus", ["fontReset"] = "Ctrl+Digit0"
     };
     private static readonly HashSet<string> Reserved = new(StringComparer.Ordinal)
@@ -62,6 +63,8 @@ public static class PreferenceSettings
             var supplied = value.Shortcuts ?? [];
             if (supplied.Keys.Any(key => !DefaultShortcuts.ContainsKey(key))) throw new InvalidDataException("快捷键操作不存在。");
             var shortcuts = DefaultShortcuts.ToDictionary(pair => pair.Key, pair => NormalizeShortcut(supplied.GetValueOrDefault(pair.Key, pair.Value)));
+            if (!supplied.ContainsKey("snippets") && shortcuts.Any(pair => pair.Key != "snippets" && pair.Value == DefaultShortcuts["snippets"]))
+                shortcuts["snippets"] = "";
             if (shortcuts.Values.Where(binding => binding.Length > 0).Distinct().Count() != shortcuts.Values.Count(binding => binding.Length > 0))
                 throw new InvalidDataException("多个操作使用了相同的快捷键，请先解除冲突。");
             value.Shortcuts = shortcuts;

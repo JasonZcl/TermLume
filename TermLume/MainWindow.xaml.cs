@@ -19,6 +19,7 @@ public partial class MainWindow : Window
     private readonly Dictionary<string, SshSession> sessions = [];
     private Workspace workspace = new();
     private bool shuttingDown;
+    private bool exitPromptOpen;
 
     public MainWindow()
     {
@@ -388,10 +389,23 @@ public partial class MainWindow : Window
     private void OnClosing(object? sender, CancelEventArgs args)
     {
         // 有活动连接或传输时默认不退出；只有用户确认后才取消任务并释放会话。
-        if ((sessions.Count > 0 || sftpSessions.Count > 0 || transferJobs.Count > 0) && MessageBox.Show(this, Localization.Text("仍有 SSH / SFTP 连接或文件传输正在运行，确定取消传输、断开全部连接并退出吗？"), Localization.Text("退出 TermLume"), MessageBoxButton.YesNo, MessageBoxImage.Question, MessageBoxResult.No) != MessageBoxResult.Yes)
+        if (exitPromptOpen)
         {
             args.Cancel = true;
             return;
+        }
+        if (sessions.Count > 0 || sftpSessions.Count > 0 || transferJobs.Count > 0)
+        {
+            exitPromptOpen = true;
+            try
+            {
+                if (new ExitDialog(this, sessions.Count, sftpSessions.Count, transferJobs.Count).ShowDialog() != true)
+                {
+                    args.Cancel = true;
+                    return;
+                }
+            }
+            finally { exitPromptOpen = false; }
         }
         foreach (var sessionId in sessions.Keys) EndSessionActivity(sessionId, "connection.disconnected", "应用退出，SSH 连接已关闭。");
         foreach (var sessionId in sftpSessions.Keys.ToArray()) DisconnectSftp(sessionId);

@@ -137,21 +137,16 @@ document.addEventListener('click', async event => {
         break;
       case 'reconnect': { const hostId = sessions.get(activeSession)?.host.id; if (hostId) await connectHost(hostId); break; }
       case 'newSnippet': openSnippetEditor(); break;
+      case 'toggleSnippets': toggleSnippets(); break;
+      case 'closeSnippets': toggleSnippets(false); break;
+      case 'useSnippet': if (snippet) openSnippetLauncher(snippet, button.dataset.mode || 'insert'); break;
       case 'editSnippet': if (snippet) openSnippetEditor(snippet); break;
       case 'deleteSnippet':
         if (snippet && await confirmAction(t('删除命令片段？'), msg`将永久删除「${snippet.name}」。`)) refreshWorkspace(await request('deleteSnippet', { id }));
         break;
       case 'copySnippet': if (snippet) { await request('copy', { text: snippet.command }); toast(t('命令已复制')); } break;
       case 'insertSnippet': {
-        const entry = [...sessions.entries()].reverse().find(([, session]) => session.status === 'connected');
-        if (!entry) throw new Error(t('请先连接一台主机，再填入命令片段。'));
-        if (!snippet) break;
-        if (/[\r\n\x00-\x1f\x7f]/.test(snippet.command)) {
-          await request('copy', { text: snippet.command });
-          toast(t('多行或含控制字符的片段已复制，请检查后手动粘贴'));
-          break;
-        }
-        if (await confirmAction(t('填入终端？'), msg`目标：${entry[1].host.name}\n\n${snippet.command}\n\n不会自动按 Enter；请确认当前终端适合输入此命令。`)) { showSession(entry[0]); entry[1].terminal.paste(snippet.command); toast(t('命令已填入，检查后按 Enter 执行')); }
+        if (snippet) openSnippetLauncher(snippet);
         break;
       }
       case 'forgetKey':
@@ -264,6 +259,7 @@ function refreshWorkspace(value) {
   workspace = value;
   applyPreferences();
   renderSidebar();
+  renderSnippetPanel();
   if (!activeSession) renderPage();
 }
 
@@ -421,6 +417,7 @@ async function connectHost(hostId) {
 function showSession(id) {
   if (!sessions.has(id)) return;
   activeSession = id;
+  lastSnippetSession = id;
   $('#page-scroll').classList.add('hidden');
   $('#terminal-workspace').classList.remove('hidden');
   sessions.forEach((session, sessionId) => session.pane.classList.toggle('hidden', sessionId !== id));
@@ -436,6 +433,7 @@ function updateTerminalToolbar() {
   $('#terminal-state').textContent = ({ connecting: t('正在连接…'), connected: t('● 已连接'), closed: t('连接已关闭') })[session.status];
   $('#reconnect-button').classList.toggle('hidden', session.status !== 'closed');
   $('[data-action="disconnect"]').disabled = session.status !== 'connected';
+  renderSnippetPanel();
 }
 
 function fitActiveTerminal() {
@@ -544,11 +542,11 @@ function openHostEditor(initial = {}, group = currentGroup) {
 }
 
 function renderSnippets() {
-  $('#page').innerHTML = heading('LESS TYPING, MORE DOING', t('命令片段'), t('保存常用命令。一键填入终端，由你确认后再执行。'), ui`<button class="primary-button" data-action="newSnippet">${icon('plus')}新建片段</button>`) + (workspace.snippets.length ? `<div class="snippet-grid">${workspace.snippets.map(snippet => ui`<article class="snippet-card"><div class="snippet-heading">${icon('code')}<span>${escapeHtml(snippet.name)}</span><div class="host-actions"><button class="icon-button" data-action="editSnippet" data-id="${escapeHtml(snippet.id)}" title="编辑片段" aria-label="编辑片段">${icon('edit')}</button><button class="icon-button" data-action="deleteSnippet" data-id="${escapeHtml(snippet.id)}" title="删除片段" aria-label="删除片段">${icon('trash')}</button></div></div><pre>${escapeHtml(snippet.command)}</pre><div class="snippet-footer"><button class="subtle-button" data-action="copySnippet" data-id="${escapeHtml(snippet.id)}">${icon('copy')}复制</button><button class="connect-button" data-action="insertSnippet" data-id="${escapeHtml(snippet.id)}">填入终端${icon('arrow')}</button></div></article>`).join('')}</div>` : ui`<div class="no-results">${icon('code')}<br>把重复的敲击，变成一个片段。<br><button class="subtle-button" data-action="newSnippet">创建你的第一个命令片段 ${icon('plus')}</button></div>`) + uiHtml('<p class="settings-note">安全提示：片段为本地明文存储，请勿在其中保存密码、令牌或私钥。</p>');
+  $('#page').innerHTML = heading('LESS TYPING, MORE DOING', t('命令片段'), t('在终端侧栏快速查找片段，选择目标会话后填入或确认执行。'), ui`<button class="primary-button" data-action="newSnippet">${icon('plus')}新建片段</button>`) + (workspace.snippets.length ? `<div class="snippet-grid">${workspace.snippets.map(snippet => ui`<article class="snippet-card"><div class="snippet-heading">${icon('code')}<span>${escapeHtml(snippet.name)}</span><div class="host-actions"><button class="icon-button" data-action="editSnippet" data-id="${escapeHtml(snippet.id)}" title="编辑片段" aria-label="编辑片段">${icon('edit')}</button><button class="icon-button" data-action="deleteSnippet" data-id="${escapeHtml(snippet.id)}" title="删除片段" aria-label="删除片段">${icon('trash')}</button></div></div><pre>${escapeHtml(snippet.command)}</pre><div class="snippet-footer"><button class="subtle-button" data-action="copySnippet" data-id="${escapeHtml(snippet.id)}">${icon('copy')}复制</button><button class="connect-button" data-action="useSnippet" data-id="${escapeHtml(snippet.id)}">使用片段${icon('arrow')}</button></div></article>`).join('')}</div>` : ui`<div class="no-results">${icon('code')}<br>把重复的敲击，变成一个片段。<br><button class="subtle-button" data-action="newSnippet">创建你的第一个命令片段 ${icon('plus')}</button></div>`) + uiHtml('<p class="settings-note">安全提示：片段为本地明文存储，请勿在其中保存密码、令牌或私钥。</p>');
 }
 
 function openSnippetEditor(snippet = {}) {
-  openEditor(editorHeader(snippet.id ? t('编辑片段') : t('新建命令片段'), t('片段不会自动执行；填入终端后仍需按 Enter。'), 'COMMAND SNIPPET') + ui`<div class="form-grid"><div class="field full"><label for="snippet-name">名称</label><input id="snippet-name" name="name" required maxlength="100" value="${escapeHtml(snippet.name)}" placeholder="例如：查看磁盘空间" autofocus></div><div class="field full"><label for="snippet-command">命令</label><textarea class="command-textarea" id="snippet-command" name="command" required maxlength="20000" spellcheck="false" placeholder="df -h">${escapeHtml(snippet.command)}</textarea></div></div>${editorFooter(t('保存片段'))}`, async form => {
+  openEditor(editorHeader(snippet.id ? t('编辑片段') : t('新建命令片段'), t('保存不会执行命令。使用时可选择填入，或检查目标后确认执行。'), 'COMMAND SNIPPET') + ui`<div class="form-grid"><div class="field full"><label for="snippet-name">名称</label><input id="snippet-name" name="name" required maxlength="100" value="${escapeHtml(snippet.name)}" placeholder="例如：查看磁盘空间" autofocus></div><div class="field full"><label for="snippet-command">命令</label><textarea class="command-textarea" id="snippet-command" name="command" required maxlength="20000" spellcheck="false" placeholder="df -h">${escapeHtml(snippet.command)}</textarea></div></div>${editorFooter(t('保存片段'))}`, async form => {
     refreshWorkspace(await request('saveSnippet', { ...snippet, ...Object.fromEntries(new FormData(form)) }));
     toast(t('命令片段已保存'));
   });
