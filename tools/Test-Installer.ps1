@@ -6,7 +6,7 @@ param(
 
 $ErrorActionPreference = 'Stop'
 $repository = Split-Path -Parent $PSScriptRoot
-$project = [xml](Get-Content -LiteralPath (Join-Path $repository 'TermLume\TermLume.csproj') -Raw)
+$project = [xml](Get-Content -LiteralPath (Join-Path $repository 'TermLume.Windows\TermLume.Windows.csproj') -Raw)
 $version = [string]$project.Project.PropertyGroup.Version
 $nextVersion = '{0}.{1}.{2}' -f ([version]$version).Major, ([version]$version).Minor, (([version]$version).Build + 1)
 # 每次使用构建目录内的唯一测试目录及独立安装标识，不安装或卸载真实用户版本。

@@ -1,6 +1,6 @@
 # SSH.NET local security build
 
-`SSH.NET.2026.0.0.2.nupkg` is a TermLume-maintained build of SSH.NET 2026.0.0, **not an official upstream release**. The upstream MIT license is included in the package and in `TermLume/Web/vendor/sshnet.LICENSE`.
+`SSH.NET.2026.0.0.2.nupkg` is a TermLume-maintained build of SSH.NET 2026.0.0, **not an official upstream release**. The upstream MIT license is included in the package and in `TermLume.Windows/Web/vendor/sshnet.LICENSE`.
 
 - Upstream commit: `7b2fd3dbf2c86a80a7b06cea020aa5f821c9902e` (tag `2026.0.0`).
 - Source archive SHA-256: `c75daf0093744f12bf50f9e7708c6460203ddd824ea7d2f441def7066f114cf0`.

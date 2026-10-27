@@ -21,17 +21,17 @@
     "appId": "io.termlume.desktop",
     "productName": "TermLume",
     "asar": true,
-    "directories": { "buildResources": "../TermLume/Assets" },
+    "directories": { "buildResources": "../TermLume.Windows/Assets" },
     "files": ["*.cjs", "credential.html", "credential.css", "credential.js"],
     "extraResources": [
-      { "from": "../TermLume/Web", "to": "Web" },
+      { "from": "../TermLume.Windows/Web", "to": "Web" },
       { "from": "backend/osx-${arch}", "to": "backend", "filter": ["**/*", "!**/*.pdb"] }
     ],
     "artifactName": "TermLume-${version}-macOS-${arch}.${ext}",
     "mac": {
       "minimumSystemVersion": "14.0.0",
       "category": "public.app-category.developer-tools",
-      "icon": "../TermLume/Assets/TermLume-mac.png",
+      "icon": "../TermLume.Windows/Assets/TermLume-mac.png",
       "target": ["dmg", "zip"],
       "hardenedRuntime": false,
       "identity": "-",

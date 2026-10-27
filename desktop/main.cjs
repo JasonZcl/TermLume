@@ -183,7 +183,7 @@ else {
   app.on('before-quit', event => { if (!closed && mainWindow) { event.preventDefault(); void requestClose(); } });
   app.on('window-all-closed', () => { if (closed) app.quit(); });
   app.whenReady().then(async () => {
-    const webRoot = app.isPackaged ? path.join(process.resourcesPath, 'Web') : path.resolve(__dirname, '../TermLume/Web');
+    const webRoot = app.isPackaged ? path.join(process.resourcesPath, 'Web') : path.resolve(__dirname, '../TermLume.Windows/Web');
     protocol.handle('termlume', async request => {
       try { return await net.fetch(pathToFileURL(resourcePath(request.url, webRoot, __dirname)).toString()); }
       catch { return new Response('Not found', { status: 404 }); }
@@ -207,7 +207,7 @@ else {
     });
     mainWindow.webContents.on('render-process-gone', () => { closed = true; backend?.child.kill(); app.quit(); });
     const runtime = `${process.platform === 'darwin' ? 'osx' : process.platform === 'win32' ? 'win' : 'linux'}-${process.arch}`;
-    const executable = path.join(app.isPackaged ? path.join(process.resourcesPath, 'backend') : path.join(__dirname, 'backend', runtime), process.platform === 'win32' ? 'TermLume.Backend.exe' : 'TermLume.Backend');
+    const executable = path.join(app.isPackaged ? path.join(process.resourcesPath, 'backend') : path.join(__dirname, 'backend', runtime), process.platform === 'win32' ? 'TermLume.DesktopBackend.exe' : 'TermLume.DesktopBackend');
     if (!fs.existsSync(executable)) throw new Error('SSH backend is missing. Run npm start or rebuild the application.');
     backend = new Backend(executable, dataDirectory, message => {
       if (!closed && !mainWindow.isDestroyed()) mainWindow.webContents.send('termlume:event', message);

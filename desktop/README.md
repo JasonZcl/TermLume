@@ -1,6 +1,6 @@
 # TermLume macOS 桌面入口
 
-Windows 正式入口仍为 `TermLume/TermLume.csproj`，原有安装器和用户目录不变。此目录提供 macOS 桌面壳，复用 `../TermLume/Web`，通过标准输入 / 输出 JSON Lines 与 `TermLume.Backend` 通信；不运行本地 HTTP / WebSocket 服务，不从渲染页直接访问 Node.js 或 SSH 库。
+Windows 正式入口仍为 `TermLume.Windows/TermLume.Windows.csproj`，原有安装器和用户目录不变。此目录提供 macOS 桌面壳，复用 `../TermLume.Windows/Web`，通过标准输入 / 输出 JSON Lines 与 `TermLume.DesktopBackend` 通信；不运行本地 HTTP / WebSocket 服务，不从渲染页直接访问 Node.js 或 SSH 库。
 
 ## 开发与构建
 
@@ -14,7 +14,7 @@ npm run dist:mac:arm64
 # Intel: npm run dist:mac:x64
 ```
 
-`scripts/build-backend.cjs` 发布带本地安全修订 SSH.NET 的自包含后端，按运行时分目录存放，避免把 Windows DLL / 本机原生运行时混入 macOS 包。`scripts/package-mac.cjs` 只允许在 macOS 执行，创建临时构建目录，将最终 DMG / ZIP 复制到 `../artifacts/` 并输出 SHA-256。构建产物、`backend/`、`node_modules/` 都不提交 Git。应用图标由既有图形生成 `../TermLume/Assets/TermLume-mac.png`，打包时转换为 ICNS。
+`scripts/build-backend.cjs` 发布带本地安全修订 SSH.NET 的自包含后端，按运行时分目录存放，避免把 Windows DLL / 本机原生运行时混入 macOS 包。`scripts/package-mac.cjs` 只允许在 macOS 执行，创建临时构建目录，将最终 DMG / ZIP 复制到 `../artifacts/` 并输出 SHA-256。构建产物、`backend/`、`node_modules/` 都不提交 Git。应用图标由既有图形生成 `../TermLume.Windows/Assets/TermLume-mac.png`，打包时转换为 ICNS。
 
 GitHub **Actions → macOS desktop** 可手动触发两种架构的构建；相关 Pull Request 也会验证。安装包作为 Actions 附件保留 14 天，不自动创建 Release。正式发布前须人工验收，上传 DMG / ZIP 与校验值到 Release；已有 Windows EXE 不会因为源码改造而自动具备 macOS 能力。
 
@@ -41,7 +41,7 @@ Windows 上可执行上述隔离测试，并交叉发布 `osx-arm64` / `osx-x64`
 - `main.cjs` 独占文件选择框、剪贴板、窗口和子进程。只允许应用主窗口的精确 URL / 主 frame 调用受限通道；凭据窗口只能初始化和提交自己的凭据，不能调用主工作台能力。
 - `preload.cjs` 只暴露指定桥方法。主页面不能传入 `hostReply`、`shutdown` 或自行声明拖放的绝对路径。Finder 的真实 File 由预加载层 `webUtils.getPathForFile` 转换；后端逐项验证普通文件、路径范围、链接和队列容量。
 - 密码不进入命令行参数、环境变量、工作空间或日志；托管字符串不能保证即时清零。窗口关闭或取消返回 `null`，空字符串仅代表用户明确提交空口令。
-- .NET 的 SSH / SFTP、认证、已知主机、持久化和本地文件服务以链接源码复用 Windows 实现，必须继续使用 `NuGet.config` 固定来源的 `SSH.NET 2026.0.0.2`，不能换回没有接收限额的版本。两个窗口控制器的操作验证与业务行为需要保持一致。
+- Windows 与 .NET 后端均通过项目引用使用 `TermLume.Shared`，工作区控制器、SSH / SFTP、认证、已知主机、持久化和本地文件服务只有一份实现。平台差异通过 `IWorkspaceHost`、`IWorkspaceDispatcher` 适配；不要在桌面壳或进程入口重复实现业务验证。必须继续使用 `NuGet.config` 固定来源的 `SSH.NET 2026.0.0.2`，不能换回没有接收限额的版本。详细约定见 [架构说明](../docs/architecture.md)。
 - 配置 / 日志位于 `~/Library/Application Support/TermLume/`，Electron 浏览器缓存位于其中的 `Desktop/`。替换应用不会重置数据。默认只卸载 `.app`；彻底删除数据必须由用户明确选择并先备份，不递归清理其他目录。
 - 退出时检查在线连接和传输，默认继续使用；明确确认后取消传输、等待清理并释放连接。后端异常退出会停止界面，不自动重新连接或替换损坏配置。
 

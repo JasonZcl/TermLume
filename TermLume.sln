@@ -1,8 +1,10 @@
 ﻿
 Microsoft Visual Studio Solution File, Format Version 12.00
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "TermLume", "TermLume\TermLume.csproj", "{06E4F902-F32B-4C15-A334-A473FC515EBB}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "TermLume.Windows", "TermLume.Windows\TermLume.Windows.csproj", "{06E4F902-F32B-4C15-A334-A473FC515EBB}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "TermLume.Backend", "TermLume.Backend\TermLume.Backend.csproj", "{625791B1-E8DD-4581-A256-886DD0E260D7}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "TermLume.DesktopBackend", "TermLume.DesktopBackend\TermLume.DesktopBackend.csproj", "{625791B1-E8DD-4581-A256-886DD0E260D7}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "TermLume.Shared", "TermLume.Shared\TermLume.Shared.csproj", "{A302086C-767E-4E1D-B261-E8C9199A4B5F}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
@@ -10,6 +12,10 @@ Global
 		Release|Any CPU = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{A302086C-767E-4E1D-B261-E8C9199A4B5F}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{A302086C-767E-4E1D-B261-E8C9199A4B5F}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{A302086C-767E-4E1D-B261-E8C9199A4B5F}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{A302086C-767E-4E1D-B261-E8C9199A4B5F}.Release|Any CPU.Build.0 = Release|Any CPU
 		{625791B1-E8DD-4581-A256-886DD0E260D7}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
 		{625791B1-E8DD-4581-A256-886DD0E260D7}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{625791B1-E8DD-4581-A256-886DD0E260D7}.Release|Any CPU.ActiveCfg = Release|Any CPU

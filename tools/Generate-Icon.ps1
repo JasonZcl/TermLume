@@ -3,7 +3,7 @@ param()
 $ErrorActionPreference = 'Stop'
 Add-Type -AssemblyName System.Drawing
 $rootDirectory = Split-Path $PSScriptRoot -Parent
-$assetsDirectory = Join-Path $rootDirectory 'TermLume/Assets'
+$assetsDirectory = Join-Path $rootDirectory 'TermLume.Windows/Assets'
 $iconPath = Join-Path $assetsDirectory 'TermLume.ico'
 
 function New-RoundedRectangle([float]$left, [float]$top, [float]$width, [float]$height, [float]$radius) {
@@ -81,5 +81,5 @@ $gradient.Dispose()
 $outlinePen.Dispose()
 $promptPen.Dispose()
 $cursorPen.Dispose()
-Copy-Item -LiteralPath (Join-Path $assetsDirectory 'TermLume.svg') -Destination (Join-Path $rootDirectory 'TermLume/Web/favicon.svg') -Force
+Copy-Item -LiteralPath (Join-Path $assetsDirectory 'TermLume.svg') -Destination (Join-Path $rootDirectory 'TermLume.Windows/Web/favicon.svg') -Force
 Write-Output "Generated $iconPath with $($sizes.Count) sizes."

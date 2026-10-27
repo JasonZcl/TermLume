@@ -6,7 +6,7 @@ const path = require('node:path');
 const vm = require('node:vm');
 const { test } = require('node:test');
 
-const source = fs.readFileSync(path.join(__dirname, '../TermLume/Web/snippets.js'), 'utf8');
+const source = fs.readFileSync(path.join(__dirname, '../TermLume.Windows/Web/snippets.js'), 'utf8');
 const escapeHtml = value => String(value ?? '').replace(/[&<>"']/g, character => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[character]);
 
 function fixture() {

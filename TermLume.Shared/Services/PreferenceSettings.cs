@@ -1,0 +1,93 @@
+using System.IO;
+using System.Text.RegularExpressions;
+using TermLume.Shared.Models;
+
+namespace TermLume.Shared.Services;
+
+/// <summary>统一偏好与快捷键的取值规则，原生端不依赖页面校验来保证配置有效。</summary>
+public static class PreferenceSettings
+{
+    // 操作标识和默认绑定须与 Web/preferences.js 同步；绑定使用 KeyboardEvent.code。
+    public static readonly IReadOnlyDictionary<string, string> WindowsShortcuts = new Dictionary<string, string>
+    {
+        ["newHost"] = "Ctrl+KeyN", ["newGroup"] = "Ctrl+Shift+KeyN", ["searchHosts"] = "Ctrl+KeyK",
+        ["settings"] = "Ctrl+Comma", ["workspace"] = "Ctrl+Shift+KeyH", ["openTerminal"] = "Ctrl+Shift+KeyT",
+        ["closeTab"] = "Ctrl+Shift+KeyW", ["nextTab"] = "Ctrl+Tab", ["previousTab"] = "Ctrl+Shift+Tab",
+        ["reconnect"] = "Ctrl+Shift+KeyR", ["copy"] = "Ctrl+Shift+KeyC", ["paste"] = "Ctrl+Shift+KeyV",
+        ["clearTerminal"] = "Ctrl+Shift+KeyL", ["toggleSidebar"] = "Ctrl+Shift+KeyB",
+        ["snippets"] = "Ctrl+Shift+KeyS",
+        ["fontIncrease"] = "Ctrl+Equal", ["fontDecrease"] = "Ctrl+Minus", ["fontReset"] = "Ctrl+Digit0"
+    };
+    public static readonly IReadOnlyDictionary<string, string> MacOSShortcuts = WindowsShortcuts.ToDictionary(pair => pair.Key, pair => pair.Key switch
+    {
+        "nextTab" or "previousTab" => pair.Value,
+        "copy" => "Meta+KeyC",
+        "paste" => "Meta+KeyV",
+        "closeTab" => "Meta+KeyW",
+        _ => pair.Value.Replace("Ctrl+", "Meta+", StringComparison.Ordinal)
+    });
+    public static readonly IReadOnlyDictionary<string, string> DefaultShortcuts = OperatingSystem.IsMacOS() ? MacOSShortcuts : WindowsShortcuts;
+    private static readonly HashSet<string> MacOSReserved = new(StringComparer.Ordinal)
+    {
+        "Meta+KeyQ", "Meta+KeyH", "Meta+Alt+KeyH", "Meta+KeyM", "Meta+Tab", "Meta+Shift+Tab", "Meta+Space", "Ctrl+Space", "Meta+Alt+Escape", "Ctrl+Meta+KeyF",
+        "Meta+KeyA", "Meta+KeyX", "Meta+KeyZ", "Meta+Shift+KeyZ"
+    };
+    private static readonly HashSet<string> Reserved = new(StringComparer.Ordinal)
+    {
+        "Alt+F4", "Alt+Tab", "Alt+Shift+Tab", "Alt+Space", "Ctrl+Alt+Delete", "Ctrl+Escape", "Ctrl+Shift+Escape",
+        "Ctrl+KeyA", "Ctrl+KeyC", "Ctrl+KeyV", "Ctrl+KeyX", "Ctrl+KeyY", "Ctrl+KeyZ", "Ctrl+Shift+KeyZ", "Ctrl+KeyD", "Ctrl+KeyL"
+    };
+
+    public static string NormalizeShortcut(string? value, bool? macOS = null)
+    {
+        var mac = macOS ?? OperatingSystem.IsMacOS();
+        if (value == "") return "";
+        if (value is null || value.Length > 60) throw new InvalidDataException("快捷键格式无效。");
+        var parts = value.Split('+');
+        var code = parts[^1];
+        code = code switch { "NumpadAdd" => "Equal", "NumpadSubtract" => "Minus", _ => code };
+        var modifiers = parts[..^1];
+        var functionKey = Regex.IsMatch(code, @"\AF([1-9]|1[0-2])\z");
+        if (modifiers.Distinct().Count() != modifiers.Length || modifiers.Any(part => part is not ("Ctrl" or "Alt" or "Shift") && !(mac && part == "Meta")) || !functionKey && !modifiers.Any(part => part is "Ctrl" or "Alt" || mac && part == "Meta") ||
+            !Regex.IsMatch(code, @"\A(Key[A-Z]|Digit[0-9]|F([1-9]|1[0-2])|Comma|Period|Slash|Backslash|Semicolon|Quote|BracketLeft|BracketRight|Minus|Equal|Backquote|Tab|Space|Enter|Backspace|Delete|Insert|Home|End|PageUp|PageDown|ArrowLeft|ArrowRight|ArrowUp|ArrowDown)\z"))
+            throw new InvalidDataException(mac ? "请使用 Command / Ctrl / Option 组合或 F1–F12 功能键。" : "请使用 Ctrl / Alt 组合或 F1–F12 功能键；不支持 Windows 键或仅 Shift 加普通按键。");
+        var normalized = string.Join('+', new[] { "Ctrl", "Meta", "Alt", "Shift" }.Where(modifiers.Contains).Append(code));
+        if (normalized is "Ctrl+Shift+Equal" or "Meta+Shift+Equal") normalized = normalized.Replace("Shift+", "", StringComparison.Ordinal);
+        if (Reserved.Contains(normalized) || mac && MacOSReserved.Contains(normalized)) throw new InvalidDataException("该组合由系统、文本编辑或终端控制使用，请选择其他快捷键。");
+        return normalized;
+    }
+
+    /// <summary>加载旧配置时容错回退；界面提交时使用严格模式，直接报告无效输入。</summary>
+    public static Preferences Normalize(Preferences value, bool strict = false)
+    {
+        if (value.Language is not ("zh-CN" or "en"))
+        {
+            if (strict) throw new InvalidDataException("不支持的界面语言。");
+            value.Language = "zh-CN";
+        }
+        value.FontSize = Math.Clamp(value.FontSize, 11, 24);
+        if (value.TerminalTheme is not ("midnight" or "nord")) value.TerminalTheme = "midnight";
+        if (value.FontFamily is not ("cascadia" or "consolas" or "jetbrains")) value.FontFamily = "cascadia";
+        value.LineHeight = double.IsFinite(value.LineHeight) ? Math.Clamp(value.LineHeight, 1, 1.8) : 1.2;
+        value.Scrollback = Math.Clamp(value.Scrollback, 1000, 50000);
+        if (value.CursorStyle is not ("block" or "underline" or "bar")) value.CursorStyle = "block";
+        if (value.Accent is not ("lavender" or "mint" or "ocean")) value.Accent = "lavender";
+        if (value.Density is not ("compact" or "comfortable")) value.Density = "compact";
+        try
+        {
+            var supplied = value.Shortcuts ?? [];
+            if (supplied.Keys.Any(key => !DefaultShortcuts.ContainsKey(key))) throw new InvalidDataException("快捷键操作不存在。");
+            var shortcuts = DefaultShortcuts.ToDictionary(pair => pair.Key, pair => NormalizeShortcut(supplied.GetValueOrDefault(pair.Key, pair.Value)));
+            if (!supplied.ContainsKey("snippets") && shortcuts.Any(pair => pair.Key != "snippets" && pair.Value == DefaultShortcuts["snippets"]))
+                shortcuts["snippets"] = "";
+            if (shortcuts.Values.Where(binding => binding.Length > 0).Distinct().Count() != shortcuts.Values.Count(binding => binding.Length > 0))
+                throw new InvalidDataException("多个操作使用了相同的快捷键，请先解除冲突。");
+            value.Shortcuts = shortcuts;
+        }
+        catch (InvalidDataException) when (!strict)
+        {
+            value.Shortcuts = DefaultShortcuts.ToDictionary(pair => pair.Key, pair => pair.Value);
+        }
+        return value;
+    }
+}

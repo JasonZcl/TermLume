@@ -8,7 +8,7 @@ const vm = require('node:vm');
 
 function fixture(platform) {
   const context = vm.createContext({ window: { termlume: { platform } }, document: { body: { dataset: {} }, addEventListener() {} }, t: text => text });
-  for (const file of ['platform.js', 'preferences.js']) vm.runInContext(fs.readFileSync(path.resolve(__dirname, '../../TermLume/Web', file), 'utf8'), context);
+  for (const file of ['platform.js', 'preferences.js']) vm.runInContext(fs.readFileSync(path.resolve(__dirname, '../../TermLume.Windows/Web', file), 'utf8'), context);
   return vm.runInContext('({ defaultShortcuts, normalizeShortcut, shortcutLabel, bindingFromEvent, platformDataFile, platformText })', context);
 }
 

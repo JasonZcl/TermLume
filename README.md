@@ -106,13 +106,13 @@ npm run dist:mac:arm64
 ```powershell
 dotnet restore TermLume.sln
 dotnet build TermLume.sln
-dotnet run --project TermLume
+dotnet run --project TermLume.Windows
 ```
 
 发布框架依赖版（目标设备需要 .NET 10.0.14 或更新安全补丁的 Desktop Runtime，以及 WebView2 Runtime）：
 
 ```powershell
-dotnet publish TermLume/TermLume.csproj -c Release -r win-x64 --self-contained false -o "$env:TEMP/TermLume-framework-dependent-v0.7.1"
+dotnet publish TermLume.Windows/TermLume.Windows.csproj -c Release -r win-x64 --self-contained false -o "$env:TEMP/TermLume-framework-dependent-v0.7.1"
 ```
 
 ## Windows 安装包
@@ -157,7 +157,7 @@ $env:TERMLUME_TEST_PYTHON = "$venv/Scripts/python.exe"
 dotnet run --project tests/TermLume.SecurityTests -c Release -p:SelfContained=true
 ```
 
-覆盖密钥与算法变更、旧信任记录兼容、写盘失败回滚、无前端 ACK 的输出洪泛与确认超时、PTY 建立阶段洪泛、正常 UTF-8 输出与窗口调整、密码和加密 / 未加密 RSA 私钥认证、会话隔离，以及 SFTP 上传下载与拒绝覆盖。测试使用自包含的 .NET 10.0.14 运行时。
+覆盖密钥与算法变更、旧信任记录兼容、写盘失败回滚、无前端 ACK 的输出洪泛与确认超时、PTY 建立阶段洪泛、正常 UTF-8 输出与窗口调整、密码和加密 / 未加密 RSA 私钥认证、会话隔离，以及 SFTP 上传下载与拒绝覆盖。同时覆盖共享控制器的旧工作区兼容、主机 / 分组 / 片段操作、凭据取消、偏好写盘失败回滚、本地文件范围、日志导出保护及退出状态。测试使用自包含的 .NET 10.0.14 运行时。
 
 片段前端回归测试只依赖 Node.js，使用模拟终端与桥接，不连接真实主机：
 
@@ -224,7 +224,7 @@ node --test tests/snippets.test.cjs
 
 仅翻译应用界面及系统生成的提示；用户填写的主机名、分组名、备注、命令片段、文件名、路径和远端终端输出保持原样。内置「未分组」只改变显示名称，不改写原分组值；历史日志在展示时翻译，日志原文、事件 ID 和导出内容不改写。日期显示随界面语言切换，时区不变。Windows 系统文件选择框、系统消息框按钮以及第三方组件返回的原始错误可能遵循系统 / 组件语言。
 
-中文源文案作为稳定键，英文资源统一位于 `TermLume/Web/locales/en.json`，前端和原生 WPF 共用同一词典。前端使用 `t()` 处理普通提示、`msg` 处理带参数的提示、`ui` / `uiHtml()` 只翻译模板静态部分，不翻译插入的用户数据。语言偏好存入 `workspace.json` 的 `preferences.language`，支持 `zh-CN` / `en`；未知的旧值回退为中文，不会在加载时静默覆盖原配置。
+中文源文案作为稳定键，英文资源统一位于 `TermLume.Windows/Web/locales/en.json`，前端和原生 WPF 共用同一词典。前端使用 `t()` 处理普通提示、`msg` 处理带参数的提示、`ui` / `uiHtml()` 只翻译模板静态部分，不翻译插入的用户数据。语言偏好存入 `workspace.json` 的 `preferences.language`，支持 `zh-CN` / `en`；未知的旧值回退为中文，不会在加载时静默覆盖原配置。
 
 ## SFTP 文件管理
 
@@ -242,7 +242,7 @@ SFTP 活动会记录连接结果、文件操作类型、传输方向和完成字
 
 ## 图标源文件
 
-矢量源文件位于 `TermLume/Assets/TermLume.svg`，多尺寸 Windows 图标为 `TermLume/Assets/TermLume.ico`。修改图形时同步调整生成脚本的形状定义，在 Windows 上执行 `./tools/Generate-Icon.ps1` 可重新生成 ICO、PNG 和页面 SVG 标识。新版兼容旧配置，退出旧版后打开新版即可继续使用已有主机和信任指纹；旧记录没有核验时间时显示为未知，不虚构历史日期。使用新版后请勿交替运行旧版，旧版保存时不识别新增的分组和核验元数据。
+矢量源文件位于 `TermLume.Windows/Assets/TermLume.svg`，多尺寸 Windows 图标为 `TermLume.Windows/Assets/TermLume.ico`。修改图形时同步调整生成脚本的形状定义，在 Windows 上执行 `./tools/Generate-Icon.ps1` 可重新生成 ICO、PNG 和页面 SVG 标识。新版兼容旧配置，退出旧版后打开新版即可继续使用已有主机和信任指纹；旧记录没有核验时间时显示为未知，不虚构历史日期。使用新版后请勿交替运行旧版，旧版保存时不识别新增的分组和核验元数据。
 
 ## 已知主机与日志
 
@@ -273,17 +273,23 @@ SFTP 活动会记录连接结果、文件操作类型、传输方向和完成字
 
 ## 项目结构
 
+三个 .NET 项目按职责命名：`TermLume.Windows` 是 Windows 桌面入口，`TermLume.DesktopBackend` 是供 Electron 桌面壳调用的后台进程，`TermLume.Shared` 是两端共用的业务类库。Windows 直接调用共享类库，不启动桌面后端。
+
+项目更名不改变产品标识：Windows 仍生成 `TermLume.exe`，安装器升级标识、应用名称及用户数据目录保持不变。
+
 | 路径 | 用途 |
 | --- | --- |
-| `TermLume/Models` | 主机、分组、偏好及其他数据结构 |
-| `TermLume/Services` | 配置持久化、SSH / SFTP 会话、日志及本地文件浏览 |
-| `TermLume/Views` | 原生凭据对话框和本地化界面支持 |
-| `TermLume/MainWindow.xaml.cs`、`TermLume/MainWindow.Sftp.cs` | 原生窗口、消息桥及安全确认 |
-| `TermLume/Web` | 工作台、设置、双栏文件管理及本地终端资源 |
-| `TermLume.Backend` | macOS 桌面使用的 .NET 后端与标准输入 / 输出桥，链接复用核心服务源码 |
+| `TermLume.Shared/Models` | 两个平台共用的主机、分组、偏好及其他数据结构 |
+| `TermLume.Shared/Services` | 配置持久化、SSH / SFTP 会话、日志及本地文件浏览 |
+| `TermLume.Shared/Application` | 唯一的工作区请求处理、连接生命周期、传输调度和日志导出实现 |
+| `TermLume.Shared/Abstractions` | 原生交互与线程调度接口，不依赖 WPF、Electron 或进程通信 |
+| `TermLume.Windows/Views` | 原生凭据对话框和本地化界面支持 |
+| `TermLume.Windows/MainWindow.xaml.cs`、`TermLume.Windows/Platform` | Windows 窗口、WebView2 消息桥及原生对话框、线程调度适配 |
+| `TermLume.Windows/Web` | 工作台、设置、双栏文件管理及本地终端资源 |
+| `TermLume.DesktopBackend` | macOS 桌面使用的 .NET 进程入口、标准输入 / 输出桥及线程调度，项目引用共享核心 |
 | `desktop` | Electron 桌面入口、受限预加载桥、macOS 凭据窗口及 DMG / ZIP 构建脚本 |
 | `.github/workflows/macos.yml` | Apple Silicon / Intel 构建、回归验证与工作流安装包附件 |
-| `TermLume/Assets` | 应用图标及源素材 |
+| `TermLume.Windows/Assets` | 应用图标及源素材 |
 | `tools/Build-Installer.ps1` | 构建自包含 Windows 安装包 |
 | `tools/installer` | Inno Setup 安装 / 卸载脚本与安装器语言文件 |
 | `tools/Test-Installer.ps1` | 隔离的安装、升级、数据保留及卸载清理验证 |
@@ -294,4 +300,6 @@ SFTP 活动会记录连接结果、文件操作类型、传输方向和完成字
 | `vendor/packages`、`tools/Build-SshNet.ps1` | 固定来源的 SSH.NET 安全补丁及重建脚本 |
 | `artifacts/` | 本地生成的 Windows EXE、macOS DMG / ZIP，整个目录不提交 Git |
 
-第三方终端资源许可证位于 `TermLume/Web/vendor`。本地构建产生的中间产物不属于发布文件，个人配置始终保存在仓库以外的应用数据目录。
+Windows 与 macOS 通过 `ProjectReference` 使用同一份 `TermLume.Shared` 类库，不再链接编译服务源码或维护两套业务控制器。用户数据目录与 JSON 格式不变，升级无需迁移工作空间文件。详细分层和开发约定见 [架构说明](docs/architecture.md)。
+
+第三方终端资源许可证位于 `TermLume.Windows/Web/vendor`。本地构建产生的中间产物不属于发布文件，个人配置始终保存在仓库以外的应用数据目录。

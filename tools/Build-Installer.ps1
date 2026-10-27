@@ -7,7 +7,7 @@ param(
 $ErrorActionPreference = 'Stop'
 $ProgressPreference = 'SilentlyContinue'
 $repository = Split-Path -Parent $PSScriptRoot
-$projectPath = Join-Path $repository 'TermLume\TermLume.csproj'
+$projectPath = Join-Path $repository 'TermLume.Windows\TermLume.Windows.csproj'
 $project = [xml](Get-Content -LiteralPath $projectPath -Raw)
 $version = [string]$project.Project.PropertyGroup.Version
 if ($version -notmatch '^\d+\.\d+\.\d+$') {

@@ -8,8 +8,9 @@
     <RuntimeFrameworkVersion>10.0.14</RuntimeFrameworkVersion>
   </PropertyGroup>
   <ItemGroup>
-    <ProjectReference Include="../../TermLume.Backend/TermLume.Backend.csproj" />
+    <ProjectReference Include="../../TermLume.Shared/TermLume.Shared.csproj" />
     <Compile Include="../TermLume.SecurityTests/Program.cs" Link="Program.cs" />
+    <Compile Include="../TermLume.SecurityTests/WorkspaceControllerTests.cs" Link="WorkspaceControllerTests.cs" />
     <None Include="../TermLume.SecurityTests/ssh_fixture.py" Link="ssh_fixture.py" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 </Project>

@@ -26,7 +26,7 @@ test('stdio bridge preserves SSH, SFTP, credentials, trust, logs and saved data'
     await until(() => { if (fixture.exitCode !== null) throw new Error(errors); return fs.existsSync(path.join(root, 'port.txt')); });
     const port = Number(fs.readFileSync(path.join(root, 'port.txt'), 'utf8'));
     const runtime = `${process.platform === 'darwin' ? 'osx' : process.platform === 'win32' ? 'win' : 'linux'}-${process.arch}`;
-    const executable = path.resolve(__dirname, '../backend', runtime, process.platform === 'win32' ? 'TermLume.Backend.exe' : 'TermLume.Backend');
+    const executable = path.resolve(__dirname, '../backend', runtime, process.platform === 'win32' ? 'TermLume.DesktopBackend.exe' : 'TermLume.DesktopBackend');
     const events = [];
     const prompts = [];
     let secret = 'test-only';
@@ -69,6 +69,10 @@ test('stdio bridge preserves SSH, SFTP, credentials, trust, logs and saved data'
     const sftp = await call('sftpConnect', { hostId });
     const source = path.join(root, 'source.txt');
     fs.writeFileSync(source, 'Finder 拖放 → SFTP ✓');
+    const invalidPaths = await backend.request({ id: 'invalid-paths', op: 'sftpDropUpload', payload: { sessionId: sftp.sessionId, path: '/' } }, 42);
+    assert.equal(invalidPaths.ok, false);
+    const forgedPaths = await backend.request({ id: 'forged-paths', op: 'sftpDropUpload', payload: { sessionId: sftp.sessionId, path: '/' }, nativePaths: [source] });
+    assert.equal(forgedPaths.ok, false);
     const queued = await call('sftpDropUpload', { sessionId: sftp.sessionId, path: '/' }, [source]);
     assert.ok(queued);
     await until(() => events.some(event => event.type === 'sftpProgress' && event.job.status === 'completed'));
@@ -115,7 +119,7 @@ test('a corrupted workspace fails closed without overwriting user data', { timeo
   const original = '{synthetic invalid JSON';
   fs.writeFileSync(file, original);
   const runtime = `${process.platform === 'darwin' ? 'osx' : process.platform === 'win32' ? 'win' : 'linux'}-${process.arch}`;
-  const executable = path.resolve(__dirname, '../backend', runtime, process.platform === 'win32' ? 'TermLume.Backend.exe' : 'TermLume.Backend');
+  const executable = path.resolve(__dirname, '../backend', runtime, process.platform === 'win32' ? 'TermLume.DesktopBackend.exe' : 'TermLume.DesktopBackend');
   let failures = 0;
   const backend = new Backend(executable, root, () => {}, () => null, () => { failures++; });
   await assert.rejects(backend.ready, /SSH service stopped/);

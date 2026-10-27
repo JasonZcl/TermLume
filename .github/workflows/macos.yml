@@ -4,8 +4,9 @@ on:
   workflow_dispatch:
   pull_request:
     paths:
-      - 'TermLume/**'
-      - 'TermLume.Backend/**'
+      - 'TermLume.Windows/**'
+      - 'TermLume.DesktopBackend/**'
+      - 'TermLume.Shared/**'
       - 'desktop/**'
       - 'tests/**'
       - 'vendor/packages/**'

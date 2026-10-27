@@ -4,8 +4,8 @@ using System.Reflection;
 using System.Text;
 using System.Text.Json;
 using Renci.SshNet;
-using TermLume.Models;
-using TermLume.Services;
+using TermLume.Shared.Models;
+using TermLume.Shared.Services;
 
 var root = Path.Combine(Path.GetTempPath(), "TermLume-security-tests-" + Guid.NewGuid().ToString("N"));
 Directory.CreateDirectory(root);
@@ -93,6 +93,8 @@ File.WriteAllText(blockedDirectory, "synthetic obstruction");
 var failedWorkspace = new Workspace();
 Reject(() => new KnownHostRegistry(failedWorkspace, new WorkspaceStore(blockedDirectory)).Trust(host, "ssh-ed25519", "new"), "Failed trust persistence reports an error");
 Check(failedWorkspace.KnownHosts.Count == 0, "Failed trust persistence rolls back memory");
+
+await WorkspaceControllerTests.RunAsync(Path.Combine(root, "controller"), Check);
 
 var python = Environment.GetEnvironmentVariable("TERMLUME_TEST_PYTHON") ?? "python";
 var start = new ProcessStartInfo(python) { UseShellExecute = false, CreateNoWindow = true, RedirectStandardInput = true, RedirectStandardOutput = true, RedirectStandardError = true };
