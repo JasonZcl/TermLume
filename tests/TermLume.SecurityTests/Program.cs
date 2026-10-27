@@ -19,7 +19,7 @@ void Check(bool condition, string description)
 void Reject(Action action, string description)
 {
     try { action(); }
-    catch (Exception exception) when (exception is InvalidOperationException or IOException or UnauthorizedAccessException)
+    catch (Exception exception) when (exception is InvalidOperationException or InvalidDataException or IOException or UnauthorizedAccessException)
     { Check(true, description); return; }
     throw new InvalidOperationException("FAILED: " + description);
 }
@@ -32,11 +32,38 @@ async Task RejectAsync(Func<Task> action, string description)
 Check(Environment.Version == new Version(10, 0, 14), "Regressions execute on the pinned .NET 10.0.14 runtime");
 
 var freshPreferences = PreferenceSettings.Normalize(new Preferences());
-Check(freshPreferences.Shortcuts["snippets"] == "Ctrl+Shift+KeyS", "New profiles receive the snippets shortcut");
-var upgradedPreferences = PreferenceSettings.Normalize(new Preferences { Shortcuts = new() { ["newHost"] = "Ctrl+Shift+KeyS", ["searchHosts"] = "Ctrl+Alt+KeyK" } });
-Check(upgradedPreferences.Shortcuts["snippets"] == "" && upgradedPreferences.Shortcuts["newHost"] == "Ctrl+Shift+KeyS" && upgradedPreferences.Shortcuts["searchHosts"] == "Ctrl+Alt+KeyK", "Adding snippets never resets conflicting legacy custom shortcuts");
+Check(freshPreferences.Shortcuts["snippets"] == PreferenceSettings.DefaultShortcuts["snippets"], "New profiles receive the platform snippets shortcut");
+var legacySnippetBinding = PreferenceSettings.DefaultShortcuts["snippets"];
+var upgradedPreferences = PreferenceSettings.Normalize(new Preferences { Shortcuts = new() { ["newHost"] = legacySnippetBinding, ["searchHosts"] = "Ctrl+Alt+KeyK" } });
+Check(upgradedPreferences.Shortcuts["snippets"] == "" && upgradedPreferences.Shortcuts["newHost"] == legacySnippetBinding && upgradedPreferences.Shortcuts["searchHosts"] == "Ctrl+Alt+KeyK", "Adding snippets never resets conflicting legacy custom shortcuts");
 var disabledSnippetShortcut = PreferenceSettings.Normalize(new Preferences { Shortcuts = new() { ["snippets"] = "" } }, strict: true);
 Check(disabledSnippetShortcut.Shortcuts["snippets"] == "", "Users can disable the snippets shortcut");
+Check(PreferenceSettings.NormalizeShortcut("Shift+Meta+KeyN", macOS: true) == "Meta+Shift+KeyN", "macOS records Command shortcuts in canonical order");
+Check(PreferenceSettings.NormalizeShortcut("Meta+Shift+Equal", macOS: true) == "Meta+Equal", "macOS plus key normalization matches the frontend");
+Check(PreferenceSettings.MacOSShortcuts["copy"] == "Meta+KeyC" && PreferenceSettings.MacOSShortcuts["nextTab"] == "Ctrl+Tab", "macOS uses Command for copy and Control for tab navigation");
+Reject(() => PreferenceSettings.NormalizeShortcut("Meta+KeyQ", macOS: true), "macOS Quit remains a native system shortcut");
+Reject(() => PreferenceSettings.NormalizeShortcut("Meta+Tab", macOS: true), "macOS app switching cannot be rebound");
+Reject(() => PreferenceSettings.NormalizeShortcut("Meta+KeyN", macOS: false), "Windows still rejects the Windows key");
+Reject(() => PreferenceSettings.NormalizeShortcut("Ctrl+KeyC", macOS: true), "macOS preserves terminal interrupt semantics");
+var pathRoot = Path.Combine(root, "path-boundaries");
+Directory.CreateDirectory(pathRoot);
+var scopedBrowser = new LocalFileBrowser(pathRoot);
+Check(scopedBrowser.Validate(pathRoot) == pathRoot, "Native local folders are valid browser roots");
+Reject(() => scopedBrowser.Validate("relative.txt"), "Relative filesystem paths are rejected");
+var sibling = pathRoot + "-sibling";
+Directory.CreateDirectory(sibling);
+Reject(() => scopedBrowser.Validate(sibling), "A shared path prefix cannot escape a selected folder");
+Reject(() => scopedBrowser.Destination(pathRoot, "../escape.txt"), "Download names cannot escape the selected folder");
+if (!OperatingSystem.IsWindows())
+{
+    Check(LocalFileBrowser.ForComputer().List(LocalFileBrowser.ComputerPath).Entries.Any(entry => entry.Path == "/" && entry.Drive), "macOS volume browser includes the filesystem root");
+    Check(scopedBrowser.Destination(pathRoot, "CON") == Path.Combine(pathRoot, "CON"), "Unix filenames do not inherit Windows device-name restrictions");
+    var link = Path.Combine(pathRoot, "link");
+    Directory.CreateSymbolicLink(link, sibling);
+    Reject(() => scopedBrowser.Validate(link), "Local folder links are not followed");
+    var caseVariant = Path.Combine(Path.GetDirectoryName(pathRoot)!, "PATH-BOUNDARIES");
+    Reject(() => scopedBrowser.Validate(caseVariant), "Case variation cannot bypass a Unix folder boundary");
+}
 
 var store = new WorkspaceStore(Path.Combine(root, "workspace"));
 var workspace = new Workspace();

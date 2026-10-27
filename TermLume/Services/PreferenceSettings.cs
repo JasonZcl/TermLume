@@ -8,7 +8,7 @@ namespace TermLume.Services;
 public static class PreferenceSettings
 {
     // 操作标识和默认绑定须与 Web/preferences.js 同步；绑定使用 KeyboardEvent.code。
-    public static readonly IReadOnlyDictionary<string, string> DefaultShortcuts = new Dictionary<string, string>
+    public static readonly IReadOnlyDictionary<string, string> WindowsShortcuts = new Dictionary<string, string>
     {
         ["newHost"] = "Ctrl+KeyN", ["newGroup"] = "Ctrl+Shift+KeyN", ["searchHosts"] = "Ctrl+KeyK",
         ["settings"] = "Ctrl+Comma", ["workspace"] = "Ctrl+Shift+KeyH", ["openTerminal"] = "Ctrl+Shift+KeyT",
@@ -18,14 +18,29 @@ public static class PreferenceSettings
         ["snippets"] = "Ctrl+Shift+KeyS",
         ["fontIncrease"] = "Ctrl+Equal", ["fontDecrease"] = "Ctrl+Minus", ["fontReset"] = "Ctrl+Digit0"
     };
+    public static readonly IReadOnlyDictionary<string, string> MacOSShortcuts = WindowsShortcuts.ToDictionary(pair => pair.Key, pair => pair.Key switch
+    {
+        "nextTab" or "previousTab" => pair.Value,
+        "copy" => "Meta+KeyC",
+        "paste" => "Meta+KeyV",
+        "closeTab" => "Meta+KeyW",
+        _ => pair.Value.Replace("Ctrl+", "Meta+", StringComparison.Ordinal)
+    });
+    public static readonly IReadOnlyDictionary<string, string> DefaultShortcuts = OperatingSystem.IsMacOS() ? MacOSShortcuts : WindowsShortcuts;
+    private static readonly HashSet<string> MacOSReserved = new(StringComparer.Ordinal)
+    {
+        "Meta+KeyQ", "Meta+KeyH", "Meta+Alt+KeyH", "Meta+KeyM", "Meta+Tab", "Meta+Shift+Tab", "Meta+Space", "Ctrl+Space", "Meta+Alt+Escape", "Ctrl+Meta+KeyF",
+        "Meta+KeyA", "Meta+KeyX", "Meta+KeyZ", "Meta+Shift+KeyZ"
+    };
     private static readonly HashSet<string> Reserved = new(StringComparer.Ordinal)
     {
         "Alt+F4", "Alt+Tab", "Alt+Shift+Tab", "Alt+Space", "Ctrl+Alt+Delete", "Ctrl+Escape", "Ctrl+Shift+Escape",
         "Ctrl+KeyA", "Ctrl+KeyC", "Ctrl+KeyV", "Ctrl+KeyX", "Ctrl+KeyY", "Ctrl+KeyZ", "Ctrl+Shift+KeyZ", "Ctrl+KeyD", "Ctrl+KeyL"
     };
 
-    public static string NormalizeShortcut(string? value)
+    public static string NormalizeShortcut(string? value, bool? macOS = null)
     {
+        var mac = macOS ?? OperatingSystem.IsMacOS();
         if (value == "") return "";
         if (value is null || value.Length > 60) throw new InvalidDataException("快捷键格式无效。");
         var parts = value.Split('+');
@@ -33,12 +48,12 @@ public static class PreferenceSettings
         code = code switch { "NumpadAdd" => "Equal", "NumpadSubtract" => "Minus", _ => code };
         var modifiers = parts[..^1];
         var functionKey = Regex.IsMatch(code, @"\AF([1-9]|1[0-2])\z");
-        if (modifiers.Distinct().Count() != modifiers.Length || modifiers.Any(part => part is not ("Ctrl" or "Alt" or "Shift")) || !functionKey && !modifiers.Any(part => part is "Ctrl" or "Alt") ||
+        if (modifiers.Distinct().Count() != modifiers.Length || modifiers.Any(part => part is not ("Ctrl" or "Alt" or "Shift") && !(mac && part == "Meta")) || !functionKey && !modifiers.Any(part => part is "Ctrl" or "Alt" || mac && part == "Meta") ||
             !Regex.IsMatch(code, @"\A(Key[A-Z]|Digit[0-9]|F([1-9]|1[0-2])|Comma|Period|Slash|Backslash|Semicolon|Quote|BracketLeft|BracketRight|Minus|Equal|Backquote|Tab|Space|Enter|Backspace|Delete|Insert|Home|End|PageUp|PageDown|ArrowLeft|ArrowRight|ArrowUp|ArrowDown)\z"))
-            throw new InvalidDataException("请使用 Ctrl / Alt 组合或 F1–F12 功能键；不支持 Windows 键或仅 Shift 加普通按键。");
-        var normalized = string.Join('+', new[] { "Ctrl", "Alt", "Shift" }.Where(modifiers.Contains).Append(code));
-        if (normalized == "Ctrl+Shift+Equal") normalized = "Ctrl+Equal";
-        if (Reserved.Contains(normalized)) throw new InvalidDataException("该组合由 Windows、文本编辑或终端控制使用，请选择其他快捷键。");
+            throw new InvalidDataException(mac ? "请使用 Command / Ctrl / Option 组合或 F1–F12 功能键。" : "请使用 Ctrl / Alt 组合或 F1–F12 功能键；不支持 Windows 键或仅 Shift 加普通按键。");
+        var normalized = string.Join('+', new[] { "Ctrl", "Meta", "Alt", "Shift" }.Where(modifiers.Contains).Append(code));
+        if (normalized is "Ctrl+Shift+Equal" or "Meta+Shift+Equal") normalized = normalized.Replace("Shift+", "", StringComparison.Ordinal);
+        if (Reserved.Contains(normalized) || mac && MacOSReserved.Contains(normalized)) throw new InvalidDataException("该组合由系统、文本编辑或终端控制使用，请选择其他快捷键。");
         return normalized;
     }
 

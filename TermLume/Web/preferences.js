@@ -20,10 +20,18 @@ const shortcutDefinitions = [
   { id: 'fontDecrease', get label() { return t('减小终端字号'); }, get description() { return t('最小 11 px，最大 24 px'); }, get group() { return t('终端'); }, binding: 'Ctrl+Minus', terminalOnly: true },
   { id: 'fontReset', get label() { return t('重置终端字号'); }, get description() { return t('恢复为 14 px'); }, get group() { return t('终端'); }, binding: 'Ctrl+Digit0', terminalOnly: true }
 ];
+if (isMacOS) for (const item of shortcutDefinitions) {
+  item.binding = ({ copy: 'Meta+KeyC', paste: 'Meta+KeyV', closeTab: 'Meta+KeyW' })[item.id] || (['nextTab', 'previousTab'].includes(item.id) ? item.binding : item.binding.replace('Ctrl+', 'Meta+'));
+}
 const defaultShortcuts = Object.fromEntries(shortcutDefinitions.map(item => [item.id, item.binding]));
 const defaultPreferences = { language: 'zh-CN', fontSize: 14, terminalTheme: 'midnight', fontFamily: 'cascadia', lineHeight: 1.2, scrollback: 10000, cursorStyle: 'block', cursorBlink: true, accent: 'lavender', density: 'compact', sidebarCollapsed: false };
 const terminalFonts = { cascadia: '"Cascadia Code", Consolas, monospace', consolas: 'Consolas, "Courier New", monospace', jetbrains: '"JetBrains Mono", "Cascadia Code", Consolas, monospace' };
 const reservedShortcuts = new Set(['Alt+F4', 'Alt+Tab', 'Alt+Shift+Tab', 'Alt+Space', 'Ctrl+Alt+Delete', 'Ctrl+Escape', 'Ctrl+Shift+Escape', 'Ctrl+KeyA', 'Ctrl+KeyC', 'Ctrl+KeyV', 'Ctrl+KeyX', 'Ctrl+KeyY', 'Ctrl+KeyZ', 'Ctrl+Shift+KeyZ', 'Ctrl+KeyD', 'Ctrl+KeyL']);
+if (isMacOS) {
+  for (const binding of ['Meta+KeyQ', 'Meta+KeyH', 'Meta+Alt+KeyH', 'Meta+KeyM', 'Meta+Tab', 'Meta+Shift+Tab', 'Meta+Space', 'Ctrl+Space', 'Meta+Alt+Escape', 'Ctrl+Meta+KeyF', 'Meta+KeyA', 'Meta+KeyX', 'Meta+KeyZ', 'Meta+Shift+KeyZ']) reservedShortcuts.add(binding);
+  terminalFonts.cascadia = 'ui-monospace, "SFMono-Regular", Menlo, "Cascadia Code", monospace';
+  terminalFonts.consolas = 'Menlo, Monaco, Consolas, monospace';
+}
 let settingsSection = 'appearance';
 let shortcutQuery = '';
 let shortcutRecording = null;
@@ -106,7 +114,7 @@ function renderSettingsPreservingFocus() {
 function shortcutLabel(binding) {
   if (!binding) return t('未设置');
   const names = { Equal: '+', Minus: '−', Comma: ',', Period: '.', Slash: '/', Backslash: '\\', Semicolon: ';', Quote: "'", BracketLeft: '[', BracketRight: ']', Backquote: '`', ArrowLeft: '←', ArrowRight: '→', ArrowUp: '↑', ArrowDown: '↓', Space: 'Space' };
-  return binding.split('+').map(part => names[part] || part.replace(/^Key|^Digit/, '')).join(' + ');
+  return binding.split('+').map(part => part === 'Meta' ? '⌘' : isMacOS && part === 'Alt' ? '⌥' : names[part] || part.replace(/^Key|^Digit/, '')).join(' + ');
 }
 
 function shortcutKeys(binding) {
@@ -119,17 +127,17 @@ function normalizeShortcut(value) {
   let code = parts.pop();
   code = ({ NumpadAdd: 'Equal', NumpadSubtract: 'Minus' })[code] || code;
   const functionKey = /^F([1-9]|1[0-2])$/.test(code);
-  if (new Set(parts).size !== parts.length || parts.some(part => !['Ctrl', 'Alt', 'Shift'].includes(part)) || !functionKey && !parts.some(part => ['Ctrl', 'Alt'].includes(part)) || !/^(Key[A-Z]|Digit[0-9]|F([1-9]|1[0-2])|Comma|Period|Slash|Backslash|Semicolon|Quote|BracketLeft|BracketRight|Minus|Equal|Backquote|Tab|Space|Enter|Backspace|Delete|Insert|Home|End|PageUp|PageDown|ArrowLeft|ArrowRight|ArrowUp|ArrowDown)$/.test(code)) throw new Error(t('请使用 Ctrl / Alt 组合或 F1–F12 功能键；不支持 Windows 键或仅 Shift 加普通按键。'));
-  let binding = [...['Ctrl', 'Alt', 'Shift'].filter(part => parts.includes(part)), code].join('+');
-  if (binding === 'Ctrl+Shift+Equal') binding = 'Ctrl+Equal';
+  if (new Set(parts).size !== parts.length || parts.some(part => !['Ctrl', 'Alt', 'Shift', ...(isMacOS ? ['Meta'] : [])].includes(part)) || !functionKey && !parts.some(part => ['Ctrl', 'Alt', ...(isMacOS ? ['Meta'] : [])].includes(part)) || !/^(Key[A-Z]|Digit[0-9]|F([1-9]|1[0-2])|Comma|Period|Slash|Backslash|Semicolon|Quote|BracketLeft|BracketRight|Minus|Equal|Backquote|Tab|Space|Enter|Backspace|Delete|Insert|Home|End|PageUp|PageDown|ArrowLeft|ArrowRight|ArrowUp|ArrowDown)$/.test(code)) throw new Error(t('请使用 Ctrl / Alt 组合或 F1–F12 功能键；不支持 Windows 键或仅 Shift 加普通按键。'));
+  let binding = [...['Ctrl', 'Meta', 'Alt', 'Shift'].filter(part => parts.includes(part)), code].join('+');
+  if (['Ctrl+Shift+Equal', 'Meta+Shift+Equal'].includes(binding)) binding = binding.replace('Shift+', '');
   if (reservedShortcuts.has(binding)) throw new Error(t('该组合由 Windows、文本编辑或终端控制使用，请选择其他快捷键。'));
   return binding;
 }
 
 // 按物理键位保存，避免输入法或键盘字符布局改变快捷键标识；原生端还会再次校验。
 function bindingFromEvent(event) {
-  if (event.metaKey || event.getModifierState?.('AltGraph')) throw new Error(t('不支持 Windows 键或 AltGr，请使用 Ctrl / Alt 组合或功能键。'));
-  return normalizeShortcut([event.ctrlKey && 'Ctrl', event.altKey && 'Alt', event.shiftKey && 'Shift', event.code].filter(Boolean).join('+'));
+  if (!isMacOS && event.metaKey || event.getModifierState?.('AltGraph')) throw new Error(t('不支持 Windows 键或 AltGr，请使用 Ctrl / Alt 组合或功能键。'));
+  return normalizeShortcut([event.ctrlKey && 'Ctrl', event.metaKey && 'Meta', event.altKey && 'Alt', event.shiftKey && 'Shift', event.code].filter(Boolean).join('+'));
 }
 
 function validateShortcut(action, value) {
@@ -204,7 +212,7 @@ document.addEventListener('keydown', event => {
   let binding;
   try { binding = bindingFromEvent(event); } catch { return; }
   const definition = shortcutDefinitions.find(item => preferenceValues().shortcuts[item.id] === binding);
-  if (!definition || definition.terminalOnly && !activeSession) return;
+  if (!definition || definition.terminalOnly && (!activeSession || event.target.closest('input, select, [contenteditable="true"], textarea:not(.xterm-helper-textarea)'))) return;
   event.preventDefault(); event.stopImmediatePropagation();
   if (!event.repeat) runShortcut(definition.id).catch(error => toast(error.message, true));
 }, true);
@@ -219,7 +227,7 @@ function openShortcutEditor(action) {
   const definition = shortcutDefinitions.find(item => item.id === action);
   if (!definition) return;
   shortcutRecording = { action, value: preferenceValues().shortcuts[action], error: '' };
-  openEditor(editorHeader(t('修改快捷键'), definition.label + ' · ' + definition.description, 'WINDOWS SHORTCUT') + ui`<div class="shortcut-editor"><label for="shortcut-capture">点击下方区域，按下新的组合键</label><button id="shortcut-capture" class="shortcut-capture" type="button" autofocus aria-label="录制快捷键"></button><div id="shortcut-record-error" class="form-error" role="alert"></div><p>支持 Ctrl / Alt 组合或 F1–F12；Esc 取消，Tab 切换焦点。Windows 系统保留组合及 Ctrl+C / V 等文本编辑组合不能覆盖。</p><button class="subtle-button" type="button" data-action="clearShortcut">清除快捷键</button></div>${editorFooter(t('保存快捷键'))}`, async () => {
+  openEditor(editorHeader(t('修改快捷键'), definition.label + ' · ' + definition.description, isMacOS ? 'MACOS SHORTCUT' : 'WINDOWS SHORTCUT') + ui`<div class="shortcut-editor"><label for="shortcut-capture">点击下方区域，按下新的组合键</label><button id="shortcut-capture" class="shortcut-capture" type="button" autofocus aria-label="录制快捷键"></button><div id="shortcut-record-error" class="form-error" role="alert"></div><p>支持 Ctrl / Alt 组合或 F1–F12；Esc 取消，Tab 切换焦点。Windows 系统保留组合及 Ctrl+C / V 等文本编辑组合不能覆盖。</p><button class="subtle-button" type="button" data-action="clearShortcut">清除快捷键</button></div>${editorFooter(t('保存快捷键'))}`, async () => {
     if (shortcutRecording.error) throw new Error(shortcutRecording.error);
     const value = validateShortcut(action, shortcutRecording.value);
     shortcutRecording.saving = true;

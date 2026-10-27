@@ -29,14 +29,15 @@ public sealed class LocalFileBrowser(string root, bool allDrives = false)
     public string Validate(string path)
     {
         if (path == ComputerPath) throw new InvalidDataException("请先打开一个磁盘或文件夹，再选择文件或下载位置。");
-        if (allDrives && (path.Length < 3 || !char.IsAsciiLetter(path[0]) || path[1] != ':' || path[2] is not ('\\' or '/')))
+        if (!Path.IsPathFullyQualified(path)) throw new InvalidDataException("请输入完整的本地路径。");
+        if (allDrives && OperatingSystem.IsWindows() && (path.Length < 3 || !char.IsAsciiLetter(path[0]) || path[1] != ':' || path[2] is not ('\\' or '/')))
             throw new InvalidDataException("请输入完整磁盘路径，例如 C:\\；网络共享请通过「选择文件夹」打开。");
         var full = Path.TrimEndingDirectorySeparator(Path.GetFullPath(path));
         var scopeRoot = allDrives ? Path.GetPathRoot(full)! : Root;
-        if (allDrives && !DriveInfo.GetDrives().Any(drive => string.Equals(drive.Name, scopeRoot, StringComparison.OrdinalIgnoreCase)))
+        if (allDrives && OperatingSystem.IsWindows() && !DriveInfo.GetDrives().Any(drive => string.Equals(drive.Name, scopeRoot, PathComparison)))
             throw new DirectoryNotFoundException("此磁盘不可用，请返回「此电脑」刷新磁盘列表。");
-        if (!string.Equals(full, scopeRoot, StringComparison.OrdinalIgnoreCase) &&
-            !full.StartsWith(Path.EndsInDirectorySeparator(scopeRoot) ? scopeRoot : scopeRoot + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase))
+        if (!string.Equals(full, scopeRoot, PathComparison) &&
+            !full.StartsWith(Path.EndsInDirectorySeparator(scopeRoot) ? scopeRoot : scopeRoot + Path.DirectorySeparatorChar, PathComparison))
             throw new InvalidDataException("请先选择此文件所在的本地文件夹。");
         var current = full;
         // 不仅检查最终文件，还检查作用域内的每一级父目录，防止通过目录联接跳出边界。
@@ -44,7 +45,7 @@ public sealed class LocalFileBrowser(string root, bool allDrives = false)
         {
             if ((File.GetAttributes(current) & FileAttributes.ReparsePoint) != 0)
                 throw new InvalidDataException("为保护本地文件，暂不跟随符号链接或目录联接。");
-            if (string.Equals(Path.TrimEndingDirectorySeparator(current), scopeRoot, StringComparison.OrdinalIgnoreCase)) break;
+            if (string.Equals(Path.TrimEndingDirectorySeparator(current), scopeRoot, PathComparison)) break;
             current = Path.GetDirectoryName(current) ?? throw new InvalidDataException("本地路径无效。");
         }
         return full;
@@ -52,6 +53,16 @@ public sealed class LocalFileBrowser(string root, bool allDrives = false)
 
     public FileListing List(string path)
     {
+        if (allDrives && path == ComputerPath && !OperatingSystem.IsWindows())
+        {
+            var volumes = new List<FileEntry> { new(Localization.Text("系统磁盘 (/)"), "/", true, false, 0, DateTime.MinValue, true) };
+            if (OperatingSystem.IsMacOS() && Directory.Exists("/Volumes"))
+                volumes.AddRange(new DirectoryInfo("/Volumes").EnumerateDirectories()
+                    .Where(directory => (directory.Attributes & FileAttributes.ReparsePoint) == 0)
+                    .OrderBy(directory => directory.Name, StringComparer.Ordinal)
+                    .Select(directory => new FileEntry(directory.Name, directory.FullName, true, false, 0, DateTime.MinValue, true)));
+            return new(ComputerPath, null, volumes, true);
+        }
         if (allDrives && path == ComputerPath)
             return new(ComputerPath, null, DriveInfo.GetDrives().OrderBy(drive => drive.Name, StringComparer.OrdinalIgnoreCase)
                 .Select(drive => new FileEntry($"磁盘 ({drive.Name.TrimEnd('\\')})", drive.Name, true, false, 0, DateTime.MinValue, true)).ToArray(), true);
@@ -64,8 +75,8 @@ public sealed class LocalFileBrowser(string root, bool allDrives = false)
             entries.Add(new(item.Name, item.FullName, item is DirectoryInfo, link,
                 !link && item is FileInfo file ? file.Length : 0, item.LastWriteTimeUtc));
         }
-        var parent = allDrives && string.Equals(full, Path.GetPathRoot(full), StringComparison.OrdinalIgnoreCase)
-            ? ComputerPath : string.Equals(full, Root, StringComparison.OrdinalIgnoreCase) ? null : Path.GetDirectoryName(full);
+        var parent = allDrives && string.Equals(full, Path.GetPathRoot(full), PathComparison)
+            ? ComputerPath : string.Equals(full, Root, PathComparison) ? null : Path.GetDirectoryName(full);
         return new(full, parent,
             entries.OrderByDescending(entry => entry.Directory).ThenBy(entry => entry.Name, StringComparer.OrdinalIgnoreCase).ToArray());
     }
@@ -74,9 +85,11 @@ public sealed class LocalFileBrowser(string root, bool allDrives = false)
     {
         Validate(directory);
         if (string.IsNullOrWhiteSpace(name) || name is "." or ".." || name.IndexOfAny(Path.GetInvalidFileNameChars()) >= 0 ||
-            name.EndsWith('.') || name.EndsWith(' ') || name.Length > 240 ||
-            System.Text.RegularExpressions.Regex.IsMatch(name, @"^(CON|CONIN\$|CONOUT\$|PRN|AUX|NUL|COM[0-9¹²³]|LPT[0-9¹²³])(\.|$)", System.Text.RegularExpressions.RegexOptions.IgnoreCase))
-            throw new InvalidDataException("远端文件名不兼容 Windows，请先在远端重命名。");
+            name.Length > 240 || OperatingSystem.IsWindows() && (name.EndsWith('.') || name.EndsWith(' ') ||
+            System.Text.RegularExpressions.Regex.IsMatch(name, @"^(CON|CONIN\$|CONOUT\$|PRN|AUX|NUL|COM[0-9¹²³]|LPT[0-9¹²³])(\.|$)", System.Text.RegularExpressions.RegexOptions.IgnoreCase)))
+            throw new InvalidDataException("远端文件名不兼容本地系统，请先在远端重命名。");
         return Path.Combine(directory, name);
     }
+
+    private static StringComparison PathComparison => OperatingSystem.IsWindows() ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal;
 }

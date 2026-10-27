@@ -35,6 +35,7 @@ $graphics.DrawLines($promptPen, $points)
 $cursorPen = [System.Drawing.Pen]::new([System.Drawing.ColorTranslator]::FromHtml('#a9f5db'), 5)
 $cursorPen.StartCap = $cursorPen.EndCap = [System.Drawing.Drawing2D.LineCap]::Round
 $graphics.DrawLine($cursorPen, 35, 42, 46, 42)
+$source.Save((Join-Path $assetsDirectory 'TermLume-mac.png'), [System.Drawing.Imaging.ImageFormat]::Png)
 
 $sizes = @(16, 20, 24, 32, 40, 48, 64, 128, 256)
 $images = foreach ($size in $sizes) {

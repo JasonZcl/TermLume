@@ -1,12 +1,12 @@
 # TermLume
 
-TermLume 是一款 Windows SSH / SFTP 客户端，基于 **.NET 10 / WPF / WebView2 / SSH.NET / xterm.js**，提供主机管理、多标签终端、双栏文件传输及本地工作空间。
+TermLume 是一款支持 Windows 与 macOS 的 SSH / SFTP 桌面客户端，提供主机管理、多标签终端、双栏文件传输及本地工作空间。Windows 使用 WPF / WebView2；macOS 使用 Electron 桌面入口，两者复用 .NET 10、SSH.NET、xterm.js 和同一套工作台界面。macOS 构建与验收说明见下方「macOS 版本」。
 
 ## 下载与安装（无需编译）
 
-**安装包统一发布在 [GitHub Releases](https://github.com/JasonZcl/TermLume/releases)。** 请在对应版本的 **Assets（资源）** 中下载 Windows EXE 安装包。`artifacts/` 仅用于本地构建输出，不上传到 Git；克隆仓库或下载源码 ZIP 不包含安装包。
+**安装包统一发布在 [GitHub Releases](https://github.com/JasonZcl/TermLume/releases)。** 请在对应版本的 **Assets（资源）** 中按平台下载 Windows EXE 或 macOS DMG / ZIP；具体可用平台以实际发布的附件为准。`artifacts/` 仅用于本地构建输出，不上传到 Git；克隆仓库或下载源码 ZIP 不包含安装包。
 
-### 下载安装包
+### 下载安装包（Windows）
 
 当前 v0.7.3 安装包支持升级时自动卸载旧版程序，始终保留个人数据，并包含新的退出确认窗口、终端命令片段侧栏和可自定义的片段快捷键。
 
@@ -62,12 +62,44 @@ Get-FileHash -LiteralPath ./TermLume-0.7.3-win-x64-Setup.exe -Algorithm SHA256
 - 鼠标拖动窗口四边 / 四角缩放，保留原生缩放命中区；SFTP 中间分隔条可拖动调整双栏宽度，双击恢复均分。
 - 统一的原生密码 / 私钥口令弹窗：紫灰卡片、圆角输入框、焦点高亮、Caps Lock 提醒，支持 Enter 连接和 Esc 取消。
 - 分类设置中心：外观、终端、快捷键、数据与安全、关于；终端外观实时预览，支持强调色、卡片密度和侧栏状态保存。
-- Windows 风格的 18 项应用快捷键，可录制修改、停用、单项还原或全部恢复默认，带冲突及系统保留键检查，重启后保留。
+- 按平台提供 18 项应用快捷键：Windows 使用 Ctrl 方案，macOS 使用 Command 方案；可录制修改、停用、还原，带冲突及系统保留键检查，重启后保留。
 - 简体中文 / English 即时切换，覆盖工作台、设置、SFTP、已知主机、日志和原生认证 / 指纹提示；语言偏好自动保存。
 - 终端字体、11–24 px 字号、行高、光标样式 / 闪烁及 1,000–50,000 行滚动历史可配置，应用到已打开的终端。
 - 独立 TermLume 图标，覆盖可执行文件、任务栏、窗口、认证对话框与页面标识，ICO 包含 16–256 px 的 9 个尺寸。
 
-## 开发运行
+## macOS 版本
+
+源码提供 Apple Silicon（`arm64`）和 Intel（`x64`）两个独立构建目标，最低系统设为 **macOS 14**。macOS 安装包需要在 Mac 或仓库的 **Actions → macOS desktop → Run workflow** 中构建；不会把 Windows EXE 改名成 DMG，也不会在 Windows 上假装完成 macOS 原生验收。尚未执行的 Actions、真机测试及未上传的 Release 附件不视为已经发布。
+
+| 设备 | 构建命令（在 `desktop` 目录中） | 生成文件 |
+| --- | --- | --- |
+| Apple Silicon | `npm run dist:mac:arm64` | `TermLume-0.7.3-macOS-arm64.dmg` / `.zip` |
+| Intel | `npm run dist:mac:x64` | `TermLume-0.7.3-macOS-x64.dmg` / `.zip` |
+
+- **安装与升级**：打开 DMG，将 `TermLume.app` 拖入「应用程序」。更新前正常退出旧版本，再替换应用；个人配置放在独立目录，不随 `.app` 覆盖。内置 .NET 后端，使用者无需另外安装 .NET 或 WebView2。
+- **界面与操作**：保留主机、分组、命令片段、已知主机、日志、中英文切换与 SSH / SFTP 功能；使用 macOS 红黄绿窗口按钮、可缩放窗口、原生文件选择框及独立密码弹窗。可从 Finder 拖入普通文件上传，双栏间拖放上传 / 下载；不支持从远端面板直接拖出到 Finder。
+- **快捷键**：`⌘N` 新建主机、`⌘K` 搜索、`⌘,` 设置、`⌘C / ⌘V` 终端复制 / 粘贴、`⌘⇧S` 命令片段、`⌘W` 关闭当前会话、`Control+Tab` 切换标签。可在设置中修改；`Control+C / D / Z / L` 保留终端语义，`⌘Q / ⌘H / ⌘M / ⌘Tab` 等不允许绑定为应用操作。
+- **数据目录**：`~/Library/Application Support/TermLume/`，包含 `workspace.json`、`activity-log.json`，Electron 缓存位于 `Desktop/` 子目录。SFTP 默认显示系统磁盘和 `/Volumes` 下已挂载的普通卷，不默认打开用户主目录；符号链接不跟随。系统隐私权限不足时应由用户选择可访问目录，不建议授予整个磁盘权限。
+- **迁移 Windows 配置**：先退出两端并备份，将 `workspace.json` 复制到 macOS 数据目录；私钥文件需要自行安全转移并重新选择路径。导入的 Ctrl 自定义组合会保留，若要使用 Command 方案，在 Mac「设置 → 快捷键」恢复默认。活动日志可按需迁移，缓存不要跨平台复制。
+- **卸载**：退出后将 `.app` 移到废纸篓，默认保留个人数据。需要彻底清理时，先备份，再通过 Finder「前往文件夹」打开上述数据目录并手动移除；不要删除目录以外的私钥、下载文件或远端文件。
+- **签名边界**：默认构建使用临时签名（ad-hoc），没有 Developer ID 身份和 Apple 公证，不等于可直接面向公众分发的正式签名包；系统可能阻止来源未知的应用。请勿要求用户关闭 Gatekeeper。正式发行的证书、公证与验收步骤见 [`desktop/README.md`](desktop/README.md)。
+
+### macOS 开发与打包
+
+开发机需要 .NET 10 SDK、Node.js 24 和 Xcode Command Line Tools；不要在 Mac 上构建包含 WPF 的整个 `.sln`，使用桌面入口脚本：
+
+```bash
+cd desktop
+npm ci
+npm start
+# 按目标 CPU 选择一个
+npm run dist:mac:arm64
+# npm run dist:mac:x64
+```
+
+打包脚本将完整构建放在系统临时目录，仅把最终 DMG / ZIP 复制到仓库根目录的 `artifacts/`，并输出 SHA-256；该目录仍被 Git 排除。Actions 会分别验证两种架构并将安装包保存为工作流附件，不会自动发布 Release。维护者下载并验收后，再将内层 DMG / ZIP 上传到对应 GitHub Release 的 Assets；工作流附件外层的 ZIP 只是下载容器。
+
+## Windows 开发运行
 
 需要 Windows 10/11、.NET 10 SDK 及 Microsoft Edge WebView2 Evergreen Runtime；开发运行所需的 .NET Desktop Runtime 至少为 10.0.14，建议使用含该安全补丁或更新补丁的 SDK。首次还原 NuGet 包需要网络；终端前端依赖已打包在仓库，无需 Node.js、npm 或 CDN。SSH.NET 使用仓库 `vendor/packages` 中的本地安全修订包，来源及重建方法见该目录 README，不要替换成未设接收限额的上游版本。
 
@@ -163,7 +195,7 @@ node --test tests/snippets.test.cjs
 - 执行前请确认目标是 shell 提示符，并清空未提交的输入；命令会发往现有交互式终端，不是隔离脚本任务，不保证多行命令逐条成功或依次等待结束。断开的会话、空白及包含控制字符的片段会被拒绝。
 - 片段以本地明文保存，不要存放密码、令牌或私钥。连接仍按既有身份验证和主机指纹校验流程处理。
 
-## 外观与 Windows 快捷键
+## 外观与快捷键
 
 退出时使用与工作台一致的深色确认窗口，展示 SSH、SFTP 和传输任务数量；默认焦点为「继续使用」，按 Esc 或关闭弹窗均不退出。只有明确点击「断开并退出」才取消传输并释放连接；无活动连接时直接退出。
 
@@ -223,7 +255,7 @@ SFTP 活动会记录连接结果、文件操作类型、传输方向和完成字
 
 ## 数据与安全边界
 
-- 配置：`%LOCALAPPDATA%\TermLume\workspace.json`，主机地址、用户名、备注、命令片段、私钥路径和信任指纹均为本地明文。请勿在备注或片段中保存秘密。
+- 配置：Windows 为 `%LOCALAPPDATA%\TermLume\workspace.json`，macOS 为 `~/Library/Application Support/TermLume/workspace.json`；主机地址、用户名、备注、命令片段、私钥路径和信任指纹均为本地明文。请勿在备注或片段中保存秘密。
 - 活动日志同样是本地明文；备份时按需同时保存 `activity-log.json`，不会上传到云端。
 - 不持久化密码或私钥口令，不复制私钥、不云同步。认证库使用托管字符串，不能承诺密码在内存中被即时清零。
 - RSA 私钥使用 SHA-2 签名认证，不尝试旧的 `ssh-rsa` / SHA-1 签名或 DSA。仅支持这些旧算法的服务器需要先升级服务器配置。
@@ -231,6 +263,7 @@ SFTP 活动会记录连接结果、文件操作类型、传输方向和完成字
 - 同一地址和端口已有身份时，未信任的新密钥算法同样阻止连接，不会重新弹出首次信任提示；核验服务器变更后，需在已知主机中显式移除该端点旧记录再重新登记。已有多算法信任记录仍可正常核验。
 - 单个终端的 SSH 接收缓冲在分配前限制为 4 MiB，包含 PTY 建立阶段；超限仅断开对应会话。界面单批输出确认超过 30 秒也会断开连接，防止无响应界面长期占用连接资源。
 - WebView2 只加载本地虚拟域名资源，禁止外部导航、弹窗、下载和权限申请；页面采用 CSP，不从 CDN 加载脚本。终端输出交由 xterm.js 解析，不插入 HTML。
+- macOS 使用隔离、沙箱化的 Electron 页面，只加载随应用分发的 `termlume://app/` 资源；原生桥校验主窗口与主 frame、操作白名单和消息上限。后端通过子进程标准输入 / 输出通信，不监听本地网络端口；密码由独立受限窗口交给连接后端，不注入主工作台。
 - 将配置备份到安全位置。应用退出后可复制 / 恢复 `workspace.json`。损坏的配置会阻止启动，不会被静默覆盖。
 - 不含遥测或应用层云端请求；WebView2 Runtime 自身由 Microsoft 管理。
 
@@ -247,13 +280,18 @@ SFTP 活动会记录连接结果、文件操作类型、传输方向和完成字
 | `TermLume/Views` | 原生凭据对话框和本地化界面支持 |
 | `TermLume/MainWindow.xaml.cs`、`TermLume/MainWindow.Sftp.cs` | 原生窗口、消息桥及安全确认 |
 | `TermLume/Web` | 工作台、设置、双栏文件管理及本地终端资源 |
+| `TermLume.Backend` | macOS 桌面使用的 .NET 后端与标准输入 / 输出桥，链接复用核心服务源码 |
+| `desktop` | Electron 桌面入口、受限预加载桥、macOS 凭据窗口及 DMG / ZIP 构建脚本 |
+| `.github/workflows/macos.yml` | Apple Silicon / Intel 构建、回归验证与工作流安装包附件 |
 | `TermLume/Assets` | 应用图标及源素材 |
 | `tools/Build-Installer.ps1` | 构建自包含 Windows 安装包 |
 | `tools/installer` | Inno Setup 安装 / 卸载脚本与安装器语言文件 |
 | `tools/Test-Installer.ps1` | 隔离的安装、升级、数据保留及卸载清理验证 |
 | `tests/TermLume.SecurityTests` | 隔离的主机身份、输出洪泛及 SSH / SFTP 回归测试 |
+| `tests/TermLume.PortableTests` | 在 macOS / Windows 上复用的核心安全与文件边界回归测试 |
+| `desktop/tests` | IPC 安全、平台快捷键、真实 SSH / SFTP 桥接与隔离原生窗口验证 |
 | `tests/snippets.test.cjs` | 模拟终端的片段使用、执行确认与安全边界回归测试 |
 | `vendor/packages`、`tools/Build-SshNet.ps1` | 固定来源的 SSH.NET 安全补丁及重建脚本 |
-| `artifacts/` | 本地生成的 Windows 安装包，整个目录不提交 Git |
+| `artifacts/` | 本地生成的 Windows EXE、macOS DMG / ZIP，整个目录不提交 Git |
 
 第三方终端资源许可证位于 `TermLume/Web/vendor`。本地构建产生的中间产物不属于发布文件，个人配置始终保存在仓库以外的应用数据目录。

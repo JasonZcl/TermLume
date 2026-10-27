@@ -9,7 +9,9 @@ public sealed class WorkspaceStore
 {
     public static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web) { WriteIndented = true };
     // 用户数据与程序目录、版本分离，升级和重新安装时继续读取同一份配置。
-    public static string DataDirectory => Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "TermLume");
+    public static string DataDirectory => OperatingSystem.IsMacOS()
+        ? Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), "Library", "Application Support", "TermLume")
+        : Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "TermLume");
     private readonly string directory;
     private readonly string filePath;
 

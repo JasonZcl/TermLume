@@ -22,6 +22,7 @@ document.querySelectorAll('[title], [aria-label], [placeholder], [alt]').forEach
 });
 
 function t(text, ...values) {
+  text = platformText(text);
   if (typeof text !== 'string') return text ?? '';
   const key = values[0] === 1 && Object.hasOwn(englishMessages, text + '|one') ? text + '|one' : text;
   const translated = uiLanguage === 'en' && Object.hasOwn(englishMessages, key) ? englishMessages[key] : text;
@@ -30,12 +31,12 @@ function t(text, ...values) {
 function msg(strings, ...values) { return t(strings.reduce((text, part, index) => text + part + (index < values.length ? `{${index}}` : ''), ''), ...values); }
 // 此入口仅处理源码中的静态模板片段；动态用户数据不参与字典匹配。
 function uiHtml(markup) {
-  if (uiLanguage !== 'en') return markup;
   return markup.split(/([<>"\n])/).map(part => {
-    const key = part.trim();
-    if (!Object.hasOwn(englishMessages, key)) return part;
-    const translated = englishMessages[key].replace(/[&<>"]/g, character => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[character]);
-    return part.replace(key, () => translated);
+    const original = part.trim();
+    const key = platformText(original);
+    if (key === original && (uiLanguage !== 'en' || !Object.hasOwn(englishMessages, key))) return part;
+    const translated = (uiLanguage === 'en' && Object.hasOwn(englishMessages, key) ? englishMessages[key] : key).replace(/[&<>"]/g, character => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[character]);
+    return part.replace(original, () => translated);
   }).join('');
 }
 // 插值原样保留；需要显示用户数据的调用方仍应先使用 escapeHtml。

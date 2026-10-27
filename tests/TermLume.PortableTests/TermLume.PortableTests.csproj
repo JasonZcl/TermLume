@@ -1,0 +1,15 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <SelfContained>true</SelfContained>
+    <RuntimeFrameworkVersion>10.0.14</RuntimeFrameworkVersion>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="../../TermLume.Backend/TermLume.Backend.csproj" />
+    <Compile Include="../TermLume.SecurityTests/Program.cs" Link="Program.cs" />
+    <None Include="../TermLume.SecurityTests/ssh_fixture.py" Link="ssh_fixture.py" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+</Project>

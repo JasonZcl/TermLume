@@ -1,0 +1,47 @@
+{
+  "name": "termlume-desktop",
+  "version": "0.7.3",
+  "private": true,
+  "description": "TermLume SSH and SFTP desktop workspace",
+  "author": "TermLume contributors",
+  "main": "main.cjs",
+  "scripts": {
+    "start": "node scripts/build-backend.cjs && electron .",
+    "test": "node --test tests/*.test.cjs",
+    "test:backend": "node scripts/build-backend.cjs && node --test tests/backend.integration.cjs",
+    "test:desktop": "node scripts/build-backend.cjs && electron tests/electron-smoke.cjs",
+    "dist:mac:arm64": "node scripts/package-mac.cjs arm64",
+    "dist:mac:x64": "node scripts/package-mac.cjs x64"
+  },
+  "devDependencies": {
+    "electron": "45.0.0",
+    "electron-builder": "26.18.0"
+  },
+  "build": {
+    "appId": "io.termlume.desktop",
+    "productName": "TermLume",
+    "asar": true,
+    "directories": { "buildResources": "../TermLume/Assets" },
+    "files": ["*.cjs", "credential.html", "credential.css", "credential.js"],
+    "extraResources": [
+      { "from": "../TermLume/Web", "to": "Web" },
+      { "from": "backend/osx-${arch}", "to": "backend", "filter": ["**/*", "!**/*.pdb"] }
+    ],
+    "artifactName": "TermLume-${version}-macOS-${arch}.${ext}",
+    "mac": {
+      "minimumSystemVersion": "14.0.0",
+      "category": "public.app-category.developer-tools",
+      "icon": "../TermLume/Assets/TermLume-mac.png",
+      "target": ["dmg", "zip"],
+      "hardenedRuntime": false,
+      "identity": "-",
+      "entitlements": "entitlements.mac.plist",
+      "entitlementsInherit": "entitlements.mac.plist",
+      "notarize": false
+    },
+    "dmg": { "title": "TermLume", "contents": [
+      { "x": 160, "y": 180, "type": "file" },
+      { "x": 450, "y": 180, "type": "link", "path": "/Applications" }
+    ] }
+  }
+}

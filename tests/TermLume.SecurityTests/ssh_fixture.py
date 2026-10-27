@@ -48,7 +48,7 @@ class FixtureSftp(paramiko.SFTPServerInterface):
 
     def open(self, path, flags, attributes):
         try:
-            descriptor = os.open(self.local(path), flags | os.O_BINARY, 0o600)
+            descriptor = os.open(self.local(path), flags | getattr(os, "O_BINARY", 0), 0o600)
             mode = "r+b" if flags & os.O_RDWR else "wb" if flags & os.O_WRONLY else "rb"
             stream = os.fdopen(descriptor, mode)
             handle = paramiko.SFTPHandle(flags)

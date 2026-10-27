@@ -4,7 +4,7 @@ const $ = selector => document.querySelector(selector);
 // 用户提供的名称、路径和备注插入 HTML 前必须转义，不能作为可信界面模板处理。
 const escapeHtml = value => String(value ?? '').replace(/[&<>"']/g, character => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[character]);
 const icon = name => `<svg class="icon" aria-hidden="true"><use href="#i-${name}"/></svg>`;
-const bridge = window.chrome?.webview;
+const bridge = window.termlume || window.chrome?.webview;
 const pending = new Map();
 const sessions = new Map();
 let workspace = { groups: [], hosts: [], snippets: [], knownHosts: {}, preferences: { fontSize: 14, terminalTheme: 'midnight' } };
