@@ -4,22 +4,23 @@ TermLume 是一款 Windows SSH / SFTP 客户端，基于 **.NET 10 / WPF / WebVi
 
 ## 下载与安装（无需编译）
 
-**安装包在本地仓库根目录的 `artifacts` 文件夹中生成，该目录不再提交到 Git。** 克隆或下载源码不会附带安装包；请从项目维护者发布的 GitHub Releases 附件获取（如已发布），或者按下文「Windows 安装包」自行打包。
+**安装包统一发布在 [GitHub Releases](https://github.com/JasonZcl/TermLume/releases)。** 请在对应版本的 **Assets（资源）** 中下载 Windows EXE 安装包。`artifacts/` 仅用于本地构建输出，不上传到 Git；克隆仓库或下载源码 ZIP 不包含安装包。
 
-### 本地安装包
+### 下载安装包
 
 当前 v0.7.3 安装包支持升级时自动卸载旧版程序，始终保留个人数据，并包含新的退出确认窗口、终端命令片段侧栏和可自定义的片段快捷键。
 
 | 项目 | 说明 |
 | --- | --- |
 | 当前版本 | v0.7.3 |
-| 安装包位置 | `artifacts/TermLume-0.7.3-win-x64-Setup.exe` |
+| 下载位置 | [GitHub Releases → Assets](https://github.com/JasonZcl/TermLume/releases) |
+| 安装包文件名 | `TermLume-0.7.3-win-x64-Setup.exe` |
 | 安装包大小 | 约 48.7 MiB（51,092,102 字节） |
 | 目标平台 | Windows 10 / 11，win-x64 安装包 |
 | .NET 环境 | 已内置，不需要另外安装 .NET Runtime 或 SDK |
 | WebView2 环境 | 已安装则复用；缺少时需要联网安装 Microsoft 官方运行时 |
 
-1. 下载项目维护者发布的安装包，或本地构建后打开 `artifacts` 目录找到 EXE。源码仓库不再保存安装包。
+1. 打开 [GitHub Releases](https://github.com/JasonZcl/TermLume/releases)，进入对应版本的 **Assets**，下载 `TermLume-0.7.3-win-x64-Setup.exe`。`Source code (zip)` / `Source code (tar.gz)` 是源码，不是安装包。
 2. 保存远端工作并正常退出旧版 TermLume，然后双击安装包，选择简体中文或 English，按提示安装。
 3. 安装完成后，从开始菜单打开 TermLume；安装器默认不自动启动应用。初始程序目录为 `%LOCALAPPDATA%\Programs\TermLume`，也可以在安装时修改。
 4. 升级时直接运行新安装包，无需手动卸载；安装器会先静默卸载已登记的旧版程序，再安装新版本。主机、分组、语言、快捷键、已知主机、日志和缓存保存在独立的 `%LOCALAPPDATA%\TermLume`，自动卸载始终保留这些数据。
@@ -28,16 +29,16 @@ TermLume 是一款 Windows SSH / SFTP 客户端，基于 **.NET 10 / WPF / WebVi
 
 ### 校验安装包
 
-本地 v0.7.3 安装包的 SHA-256 为（重新打包后以构建输出为准）：
+v0.7.3 安装包的 SHA-256 如下；其他版本或重新打包的文件，请以对应 Release 发布说明中的校验值为准：
 
 ```text
 fc90fbe91c08d5c2b1386edce7cc4ab2064913b9dcdf8210840c3d811a903355
 ```
 
-在仓库根目录运行以下命令，将输出的 `Hash` 与上述值比较（大小写不影响比较）：
+在下载的安装包所在目录打开 PowerShell，运行以下命令，将输出的 `Hash` 与对应版本的校验值比较（大小写不影响比较）：
 
 ```powershell
-Get-FileHash -LiteralPath ./artifacts/TermLume-0.7.3-win-x64-Setup.exe -Algorithm SHA256
+Get-FileHash -LiteralPath ./TermLume-0.7.3-win-x64-Setup.exe -Algorithm SHA256
 ```
 
 应用和安装包目前未使用代码签名证书，Windows 可能提示发布者未知。校验值用于核对文件完整性，不能代替发布者数字签名。
@@ -84,7 +85,7 @@ dotnet publish TermLume/TermLume.csproj -c Release -r win-x64 --self-contained f
 
 ## Windows 安装包
 
-双击 `artifacts/TermLume-0.7.3-win-x64-Setup.exe` 安装。支持简体中文 / English 安装及卸载界面，默认仅为当前 Windows 用户安装，无需管理员权限；可选桌面快捷方式，也可从开始菜单打开。安装包内置 .NET，目标电脑无需另外安装 .NET Desktop Runtime。缺少 WebView2 Runtime 时，安装器使用带 Microsoft 数字签名的官方引导程序联网安装；离线电脑请提前安装 WebView2 Evergreen Runtime。运行时安装失败会中止应用安装，不继续更新程序文件。不自动启动应用，避免意外创建连接。
+从 [GitHub Releases](https://github.com/JasonZcl/TermLume/releases) 下载 `TermLume-0.7.3-win-x64-Setup.exe` 后，双击安装。支持简体中文 / English 安装及卸载界面，默认仅为当前 Windows 用户安装，无需管理员权限；可选桌面快捷方式，也可从开始菜单打开。安装包内置 .NET，目标电脑无需另外安装 .NET Desktop Runtime。缺少 WebView2 Runtime 时，安装器使用带 Microsoft 数字签名的官方引导程序联网安装；离线电脑请提前安装 WebView2 Evergreen Runtime。运行时安装失败会中止应用安装，不继续更新程序文件。不自动启动应用，避免意外创建连接。
 
 - **升级 / 重装**：直接运行新安装包，无需手动卸载。安装器按固定产品标识识别当前用户已登记的旧版，先检查运行状态、路径、版本和 WebView2 前置条件，再使用旧版自己的卸载器静默移除程序文件，最后安装新版本。自动卸载始终保留个人数据，旧版卸载失败或卸载器缺失时停止安装；也支持选择新程序目录，旧目录内非安装器创建的文件会保留。主机、分组、设置、信任记录、日志和缓存仍保存在 `%LOCALAPPDATA%\TermLume`，不会覆盖或初始化。阻止降级，包括通过更改安装目录绕过版本检查。只处理当前用户已登记的同一产品，不搜索或删除其他账号、便携副本及下载的旧安装包。新文件安装阶段失败不会自动恢复已卸载的旧版程序，可修复问题后重新运行同版或更新安装包；个人数据继续保留。
 - **先关闭应用**：安装 / 卸载前请保存远端工作并正常退出 TermLume。检测到运行中的实例会要求先关闭，不强制结束 SSH 会话、不自动重启应用。
@@ -136,9 +137,9 @@ node --test tests/snippets.test.cjs
 
 ### 安装包的 Git 管理
 
-仓库通过 `.gitignore` **忽略整个 `artifacts/` 目录，包括 EXE 安装包**。已跟踪的安装包已从 Git 索引移除，本地文件保留；提交后后续克隆不再包含该文件。旧提交中的历史安装包不会因此被清除。
+源码仓库不包含安装包。`.gitignore` 忽略整个 `artifacts/` 目录，包括 EXE 文件；该目录只作为开发者本地构建的输出位置，不上传到 Git。
 
-安装包可作为 GitHub Releases 附件单独发布，不要使用 `git add -f` 强行提交。发布目录、QA 文件及运行时缓存位于临时构建目录，不应提交。安装包内不得包含 `workspace.json`、`activity-log.json`、私钥或其他个人数据。
+安装包统一作为 [GitHub Releases](https://github.com/JasonZcl/TermLume/releases) 附件发布，与源码版本管理分开；不要使用 `git add -f` 强行提交。发布目录、QA 文件及运行时缓存位于临时构建目录，不应提交。安装包内不得包含 `workspace.json`、`activity-log.json`、私钥或其他个人数据。
 
 重新构建或发布版本后，请更新发布说明中的版本、大小和 SHA-256，将源码与 README 提交到 Git，EXE 单独上传到 Releases。构建时间等因素可能导致同一版本重新构建后的校验值不同，以实际准备分发的文件为准。
 
