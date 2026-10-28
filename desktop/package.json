@@ -1,6 +1,6 @@
 {
   "name": "termlume-desktop",
-  "version": "0.7.3",
+  "version": "0.7.4",
   "private": true,
   "description": "TermLume SSH and SFTP desktop workspace",
   "author": "TermLume contributors",

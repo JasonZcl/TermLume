@@ -8,19 +8,19 @@ TermLume 是一款支持 Windows 与 macOS 的 SSH / SFTP 桌面客户端，提�
 
 ### 下载安装包（Windows）
 
-当前 v0.7.3 安装包支持升级时自动卸载旧版程序，始终保留个人数据，并包含新的退出确认窗口、终端命令片段侧栏和可自定义的片段快捷键。
+当前 v0.7.4 安装包支持升级时自动卸载旧版程序，始终保留个人数据，并包含新的退出确认窗口、终端命令片段侧栏和可自定义的片段快捷键。
 
 | 项目 | 说明 |
 | --- | --- |
-| 当前版本 | v0.7.3 |
+| 当前版本 | v0.7.4 |
 | 下载位置 | [GitHub Releases → Assets](https://github.com/JasonZcl/TermLume/releases) |
-| 安装包文件名 | `TermLume-0.7.3-win-x64-Setup.exe` |
-| 安装包大小 | 约 48.7 MiB（51,092,102 字节） |
+| 安装包文件名 | `TermLume-0.7.4-win-x64-Setup.exe` |
+| 安装包大小 | 约 48.7 MiB（51,113,574 字节） |
 | 目标平台 | Windows 10 / 11，win-x64 安装包 |
 | .NET 环境 | 已内置，不需要另外安装 .NET Runtime 或 SDK |
 | WebView2 环境 | 已安装则复用；缺少时需要联网安装 Microsoft 官方运行时 |
 
-1. 打开 [GitHub Releases](https://github.com/JasonZcl/TermLume/releases)，进入对应版本的 **Assets**，下载 `TermLume-0.7.3-win-x64-Setup.exe`。`Source code (zip)` / `Source code (tar.gz)` 是源码，不是安装包。
+1. 打开 [GitHub Releases](https://github.com/JasonZcl/TermLume/releases)，进入对应版本的 **Assets**，下载 `TermLume-0.7.4-win-x64-Setup.exe`。`Source code (zip)` / `Source code (tar.gz)` 是源码，不是安装包。
 2. 保存远端工作并正常退出旧版 TermLume，然后双击安装包，选择简体中文或 English，按提示安装。
 3. 安装完成后，从开始菜单打开 TermLume；安装器默认不自动启动应用。初始程序目录为 `%LOCALAPPDATA%\Programs\TermLume`，也可以在安装时修改。
 4. 升级时直接运行新安装包，无需手动卸载；安装器会先静默卸载已登记的旧版程序，再安装新版本。主机、分组、语言、快捷键、已知主机、日志和缓存保存在独立的 `%LOCALAPPDATA%\TermLume`，自动卸载始终保留这些数据。
@@ -29,16 +29,16 @@ TermLume 是一款支持 Windows 与 macOS 的 SSH / SFTP 桌面客户端，提�
 
 ### 校验安装包
 
-v0.7.3 安装包的 SHA-256 如下；其他版本或重新打包的文件，请以对应 Release 发布说明中的校验值为准：
+v0.7.4 安装包的 SHA-256 如下；其他版本或重新打包的文件，请以对应 Release 发布说明中的校验值为准：
 
 ```text
-fc90fbe91c08d5c2b1386edce7cc4ab2064913b9dcdf8210840c3d811a903355
+42f15078ec808b802ccb1a0656a94ec177089e04bb80e651ff1aebde43a0384a
 ```
 
 在下载的安装包所在目录打开 PowerShell，运行以下命令，将输出的 `Hash` 与对应版本的校验值比较（大小写不影响比较）：
 
 ```powershell
-Get-FileHash -LiteralPath ./TermLume-0.7.3-win-x64-Setup.exe -Algorithm SHA256
+Get-FileHash -LiteralPath ./TermLume-0.7.4-win-x64-Setup.exe -Algorithm SHA256
 ```
 
 应用和安装包目前未使用代码签名证书，Windows 可能提示发布者未知。校验值用于核对文件完整性，不能代替发布者数字签名。
@@ -73,8 +73,8 @@ Get-FileHash -LiteralPath ./TermLume-0.7.3-win-x64-Setup.exe -Algorithm SHA256
 
 | 设备 | 构建命令（在 `desktop` 目录中） | 生成文件 |
 | --- | --- | --- |
-| Apple Silicon | `npm run dist:mac:arm64` | `TermLume-0.7.3-macOS-arm64.dmg` / `.zip` |
-| Intel | `npm run dist:mac:x64` | `TermLume-0.7.3-macOS-x64.dmg` / `.zip` |
+| Apple Silicon | `npm run dist:mac:arm64` | `TermLume-0.7.4-macOS-arm64.dmg` / `.zip` |
+| Intel | `npm run dist:mac:x64` | `TermLume-0.7.4-macOS-x64.dmg` / `.zip` |
 
 - **安装与升级**：打开 DMG，将 `TermLume.app` 拖入「应用程序」。更新前正常退出旧版本，再替换应用；个人配置放在独立目录，不随 `.app` 覆盖。内置 .NET 后端，使用者无需另外安装 .NET 或 WebView2。
 - **界面与操作**：保留主机、分组、命令片段、已知主机、日志、中英文切换与 SSH / SFTP 功能；使用 macOS 红黄绿窗口按钮、可缩放窗口、原生文件选择框及独立密码弹窗。可从 Finder 拖入普通文件上传，双栏间拖放上传 / 下载；不支持从远端面板直接拖出到 Finder。
@@ -117,7 +117,7 @@ dotnet publish TermLume.Windows/TermLume.Windows.csproj -c Release -r win-x64 --
 
 ## Windows 安装包
 
-从 [GitHub Releases](https://github.com/JasonZcl/TermLume/releases) 下载 `TermLume-0.7.3-win-x64-Setup.exe` 后，双击安装。支持简体中文 / English 安装及卸载界面，默认仅为当前 Windows 用户安装，无需管理员权限；可选桌面快捷方式，也可从开始菜单打开。安装包内置 .NET，目标电脑无需另外安装 .NET Desktop Runtime。缺少 WebView2 Runtime 时，安装器使用带 Microsoft 数字签名的官方引导程序联网安装；离线电脑请提前安装 WebView2 Evergreen Runtime。运行时安装失败会中止应用安装，不继续更新程序文件。不自动启动应用，避免意外创建连接。
+从 [GitHub Releases](https://github.com/JasonZcl/TermLume/releases) 下载 `TermLume-0.7.4-win-x64-Setup.exe` 后，双击安装。支持简体中文 / English 安装及卸载界面，默认仅为当前 Windows 用户安装，无需管理员权限；可选桌面快捷方式，也可从开始菜单打开。安装包内置 .NET，目标电脑无需另外安装 .NET Desktop Runtime。缺少 WebView2 Runtime 时，安装器使用带 Microsoft 数字签名的官方引导程序联网安装；离线电脑请提前安装 WebView2 Evergreen Runtime。运行时安装失败会中止应用安装，不继续更新程序文件。不自动启动应用，避免意外创建连接。
 
 - **升级 / 重装**：直接运行新安装包，无需手动卸载。安装器按固定产品标识识别当前用户已登记的旧版，先检查运行状态、路径、版本和 WebView2 前置条件，再使用旧版自己的卸载器静默移除程序文件，最后安装新版本。自动卸载始终保留个人数据，旧版卸载失败或卸载器缺失时停止安装；也支持选择新程序目录，旧目录内非安装器创建的文件会保留。主机、分组、设置、信任记录、日志和缓存仍保存在 `%LOCALAPPDATA%\TermLume`，不会覆盖或初始化。阻止降级，包括通过更改安装目录绕过版本检查。只处理当前用户已登记的同一产品，不搜索或删除其他账号、便携副本及下载的旧安装包。新文件安装阶段失败不会自动恢复已卸载的旧版程序，可修复问题后重新运行同版或更新安装包；个人数据继续保留。
 - **先关闭应用**：安装 / 卸载前请保存远端工作并正常退出 TermLume。检测到运行中的实例会要求先关闭，不强制结束 SSH 会话、不自动重启应用。
