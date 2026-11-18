@@ -1,0 +1,23 @@
+.authentication-required .sidebar, .authentication-required .main { visibility: hidden; }
+.authentication-required .sidebar-toggle, .authentication-required .titlebar-add { visibility: hidden; }
+.authentication-gate { position: fixed; inset: 52px 0 0; z-index: 10; display: grid; place-items: center; overflow: auto; padding: 32px; background: radial-gradient(ellipse at 50% 30%, #39334d66, transparent 65%), var(--bg); }
+body:not(.authentication-required) .authentication-gate { display: none; }
+.authentication-card { width: min(100%, 460px); padding: 40px; border: 1px solid #48435e; border-radius: 20px; background: #29283b; box-shadow: 0 24px 80px #0003; }
+.authentication-brand { display: flex; align-items: center; gap: 12px; margin-bottom: 36px; font-size: 20px; font-weight: 650; }
+.authentication-brand img { width: 42px; height: 42px; }
+.authentication-card .eyebrow { color: var(--accent); letter-spacing: 1.6px; font-size: 10px; }
+.authentication-card h1 { margin: 12px 0; font-size: 27px; font-weight: 600; }
+.authentication-card p { color: var(--muted); line-height: 1.8; margin: 0 0 24px; }
+.authentication-provider { display: flex; align-items: center; gap: 12px; padding: 16px; margin: 26px 0; border: 1px solid var(--border); border-radius: 10px; background: #222234; }
+.authentication-provider > .icon { color: var(--accent); width: 23px; height: 23px; }
+.authentication-provider strong { display: block; font-size: 13px; font-weight: 600; }
+.authentication-provider small { display: block; margin-top: 5px; color: var(--muted); font-size: 12px; overflow-wrap: anywhere; }
+.authentication-card .primary-button { width: 100%; min-height: 42px; justify-content: center; }
+.authentication-card .secondary-button { width: 100%; margin-top: 12px; }
+.authentication-card .authentication-note { margin: 24px 0 0; font-size: 12px; color: var(--muted); }
+.authentication-error { color: #f2b4bb; line-height: 1.7; margin: 0 0 16px; white-space: pre-line; overflow-wrap: anywhere; }
+.account-button span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.account-details { display: grid; grid-template-columns: 100px minmax(0, 1fr); gap: 16px; margin: 24px 0; }
+.account-details dt { color: var(--muted); }
+.account-details dd { margin: 0; overflow-wrap: anywhere; }
+@media (max-height: 640px) { .authentication-card { padding: 28px; } .authentication-brand { margin-bottom: 20px; } }

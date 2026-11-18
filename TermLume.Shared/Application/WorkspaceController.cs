@@ -15,8 +15,12 @@ public sealed partial class WorkspaceController
     private readonly Dictionary<string, SshSession> sessions = [];
     private Workspace workspace;
     private bool shuttingDown;
+    private readonly IWorkspaceAuthentication authentication;
+    private readonly Timer authenticationTimer;
+    private bool signingOut;
+    private bool checkingAuthentication;
 
-    public WorkspaceController(string dataDirectory, IWorkspaceHost host, IWorkspaceDispatcher dispatcher)
+    public WorkspaceController(string dataDirectory, IWorkspaceHost host, IWorkspaceDispatcher dispatcher, IWorkspaceAuthentication? authentication = null)
     {
         this.dataDirectory = dataDirectory;
         this.host = host;
@@ -25,6 +29,13 @@ public sealed partial class WorkspaceController
         activityLog = new ActivityLogStore(dataDirectory);
         workspace = store.Load();
         Localization.Language = workspace.Preferences.Language;
+        if (authentication is not null) this.authentication = authentication;
+        else
+        {
+            var options = AegisOptions.Load();
+            this.authentication = new AegisAuthentication(options, new SystemAegisSessionStore(options, dataDirectory));
+        }
+        authenticationTimer = new Timer(_ => Dispatcher.BeginInvoke(CheckAuthentication), null, TimeSpan.FromSeconds(30), TimeSpan.FromSeconds(30));
         Record("application.started", "TermLume 已启动。", category: "application");
     }
 
@@ -40,8 +51,17 @@ public sealed partial class WorkspaceController
             var operation = request.GetProperty("op").GetString();
             if (shuttingDown && operation != "shutdown") throw new OperationCanceledException("应用正在退出。");
             var payload = request.GetProperty("payload");
+            var protectedOperation = operation is not ("authStatus" or "authLogin" or "authCancel" or "authLogout" or "status" or "shutdown");
+            var generation = protectedOperation ? await RequireAuthenticationAsync() : authentication.Generation;
             object? result = operation switch
             {
+                "authStatus" => new { authentication = await RefreshAuthenticationAsync(), language = workspace.Preferences.Language },
+                "authLogin" => await LoginAsync(),
+                "authCancel" => CancelLogin(),
+                "authLogout" => await LogoutAsync(),
+                "copy" => await CopyAsync(payload),
+                "paste" => await host.RequestAsync<string>("paste"),
+                "pickKey" => await host.RequestAsync<string>("pickKey"),
                 "workspace" => workspace,
                 "knownHosts" => KnownHosts.Entries(),
                 "logs" => activityLog.Snapshot(),
@@ -66,12 +86,22 @@ public sealed partial class WorkspaceController
                 _ when operation?.StartsWith("sftp", StringComparison.Ordinal) == true => await HandleSftpAsync(operation, payload),
                 _ => throw new InvalidOperationException("未知操作。")
             };
+            if (protectedOperation) RequireAuthenticationGeneration(generation);
             host.Send(new { type = "reply", id, ok = true, result });
         }
         catch (Exception exception)
         {
-            host.Send(new { type = "reply", id, ok = false, error = exception.Message });
+            host.Send(new { type = "reply", id, ok = false, error = exception.Message,
+                errorCode = exception is AccountRequiredException ? "authentication_required" : null });
         }
+    }
+
+    private Task<bool> CopyAsync(JsonElement payload)
+    {
+        if (!payload.TryGetProperty("text", out var value) || value.ValueKind != JsonValueKind.String ||
+            value.GetString() is not { Length: <= 1024 * 1024 } text)
+            throw new InvalidDataException("剪贴板文本无效或过长。");
+        return host.RequestAsync<bool>("copy", new { text });
     }
 
     private Task<string?> RequestSecretAsync(HostProfile host, bool sftp) => this.host.RequestAsync<string>("credential", new
@@ -84,11 +114,13 @@ public sealed partial class WorkspaceController
 
     private void ShowSecurityNotice(string message, string title) => host.RequestAsync<bool>("securityNotice", new { title, message }).GetAwaiter().GetResult();
     private void DispatchEvent(object message) { if (!shuttingDown) Dispatcher.Invoke(() => Post(message)); }
-    private void Post(object message) { if (!shuttingDown) host.Send(message); }
+    private void Post(object message) { if (!shuttingDown && !signingOut && authentication.State.IsAuthenticated) host.Send(message); }
 
     public async Task<bool> ShutdownAsync()
     {
         if (shuttingDown) return true;
+        authenticationTimer.Dispose();
+        authentication.Dispose();
         foreach (var id in sessions.Keys.ToArray()) EndSessionActivity(id, "connection.disconnected", "应用退出，SSH 连接已关闭。");
         var transfers = transferJobs.Values.ToArray();
         foreach (var job in transfers) job.Cancellation.Cancel();
@@ -210,12 +242,14 @@ public sealed partial class WorkspaceController
 
     private async Task<object> ConnectAsync(JsonElement payload)
     {
+        var generation = authentication.Generation;
         var host = GetHost(payload.GetProperty("hostId").GetString()!);
         var sessionId = payload.GetProperty("sessionId").GetString()!;
         if (sessions.Count >= 12) throw new InvalidOperationException("最多同时打开 12 个连接，请先关闭不再使用的会话。");
         if (!Guid.TryParse(sessionId, out _) || sessions.ContainsKey(sessionId)) throw new InvalidDataException("会话标识无效。");
         Record("connection.started", "开始建立 SSH 连接。", host, sessionId);
         var secret = await RequestSecretAsync(host, false);
+        RequireAuthenticationGeneration(generation);
         if (secret is null)
         {
             Record("connection.cancelled", "已取消凭据输入，未建立连接。", host, sessionId);
@@ -226,7 +260,7 @@ public sealed partial class WorkspaceController
         var connectionActivity = new SessionActivity(host);
         try
         {
-            session = new SshSession(host, secret, key => VerifyHostKey(host, key, sessionId));
+            session = new SshSession(host, secret, key => VerifyHostKey(host, key, sessionId, generation));
             sessions.Add(sessionId, session);
             sessionActivity.Add(sessionId, connectionActivity);
             session.Connected += () => Dispatcher.Invoke(() =>
@@ -245,6 +279,7 @@ public sealed partial class WorkspaceController
                 Post(new { type = "ended", sessionId, error });
             });
             await session.ConnectAsync(Dimension(payload, "columns", 120), Dimension(payload, "rows", 30));
+            RequireAuthenticationGeneration(generation);
             if (shuttingDown || !sessions.ContainsKey(sessionId)) throw new OperationCanceledException("连接已取消。");
             host.LastConnectedAt = DateTimeOffset.Now;
             store.Save(workspace);
@@ -264,12 +299,12 @@ public sealed partial class WorkspaceController
     }
 
     // SSH 与 SFTP 共用身份核验；首次信任需用户确认，已保存指纹变化时直接阻止连接。
-    private bool VerifyHostKey(HostProfile host, HostKeyEventArgs key, string sessionId)
+    private bool VerifyHostKey(HostProfile host, HostKeyEventArgs key, string sessionId, long generation)
     {
-        if (shuttingDown) return false;
+        if (shuttingDown || signingOut || !authentication.State.IsAuthenticated || generation != authentication.Generation) return false;
         return Dispatcher.Invoke(() =>
         {
-            if (shuttingDown) return false;
+            if (shuttingDown || signingOut || !authentication.State.IsAuthenticated || generation != authentication.Generation) return false;
             var endpoint = KnownHostRegistry.Endpoint(host, key.HostKeyName);
             var fingerprint = "SHA256:" + key.FingerPrintSHA256;
             var status = KnownHosts.Verify(host, key.HostKeyName, fingerprint);
@@ -295,6 +330,7 @@ public sealed partial class WorkspaceController
                 return false;
             }
             var answer = this.host.RequestAsync<bool>("trustHost", new { message = Localization.Text("首次连接到 {0}:{1}\n\n算法：{2}\n指纹：{3}\n\n请通过可信渠道向管理员核对指纹。确认信任并保存吗？", host.Address, host.Port, key.HostKeyName, fingerprint), title = Localization.Text("确认 SSH 服务器身份") }).GetAwaiter().GetResult();
+            if (shuttingDown || signingOut || !authentication.State.IsAuthenticated || generation != authentication.Generation) return false;
             if (!answer)
             {
                 Record("hostkey.rejected", "用户未确认服务器指纹，连接已阻止。", host, sessionId, level: "warning", category: "security", details: new() { ["endpoint"] = endpoint, ["fingerprint"] = fingerprint });

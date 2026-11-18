@@ -3,7 +3,7 @@
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
 const path = require('node:path');
-const { pageUrl, credentialUrl, trustedFrame, validateRequest, resourcePath } = require('../security.cjs');
+const { pageUrl, credentialUrl, trustedFrame, validateRequest, resourcePath, authorizationUrl } = require('../security.cjs');
 
 test('only the application main frame has access to desktop requests', () => {
   const frame = { url: pageUrl };
@@ -24,6 +24,14 @@ test('renderer cannot invoke shutdown, native host calls or spoof file-drop path
   assert.throws(() => validateRequest({ id: 'test', op: 'input', payload: { data: 'a'.repeat(2 * 1024 * 1024) } }));
   assert.throws(() => validateRequest({ id: 'test', op: 'workspace', payload: [] }));
   assert.throws(() => validateRequest({ id: '', op: 'workspace', payload: {} }));
+});
+
+test('login opens only HTTPS or loopback HTTP authorization URLs', () => {
+  assert.ok(authorizationUrl('https://iam.example.test/oauth/authorize?client_id=test'));
+  assert.ok(authorizationUrl('http://127.0.0.1:8080/oauth/authorize?client_id=test'));
+  for (const url of ['file:///secret', 'javascript:alert(1)', 'http://example.test/oauth/authorize', 'https://user:pass@example.test/oauth/authorize', 'https://example.test/other', 'https://example.test/oauth/authorize#fragment']) assert.throws(() => authorizationUrl(url));
+  for (const op of ['authStatus', 'authLogin', 'authCancel', 'authLogout']) assert.equal(validateRequest({ id: 'test', op, payload: {} }).op, op);
+  assert.throws(() => validateRequest({ id: 'test', op: 'openBrowser', payload: { url: 'https://example.test/' } }));
 });
 
 test('native file drops use a distinct allowlisted operation', () => {

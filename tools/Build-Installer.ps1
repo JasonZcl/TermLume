@@ -13,6 +13,7 @@ $version = [string]$project.Project.PropertyGroup.Version
 if ($version -notmatch '^\d+\.\d+\.\d+$') {
     throw "Expected a three-part app version, got: $version"
 }
+$setupName = "TermLume-$version-win-x64-Setup"
 $runtimeVersion = [version]$project.Project.PropertyGroup.RuntimeFrameworkVersion
 if ($runtimeVersion -lt [version]'10.0.14') { throw 'The self-contained runtime must meet the .NET 10.0.14 security baseline.' }
 
@@ -69,7 +70,13 @@ foreach ($frameworkName in @('Microsoft.NETCore.App', 'Microsoft.WindowsDesktop.
         throw "Published $frameworkName does not match the pinned security runtime $runtimeVersion."
     }
 }
-@{ version = $version; runtimeVersion = $runtimeVersion.ToString(); publish = $publishDirectory; bootstrapper = $bootstrapper } |
+$iamPath = Join-Path $publishDirectory 'aegis-iam.json'
+if (-not (Test-Path -LiteralPath $iamPath -PathType Leaf) -or
+    (Get-FileHash -LiteralPath $iamPath).Hash -ne (Get-FileHash -LiteralPath (Join-Path $repository 'aegis-iam.json')).Hash) {
+    throw 'Published Aegis-IAM configuration is missing or differs from the repository configuration.'
+}
+$iam = Get-Content -LiteralPath $iamPath -Raw | ConvertFrom-Json
+@{ version = $version; runtimeVersion = $runtimeVersion.ToString(); publish = $publishDirectory; bootstrapper = $bootstrapper; iam = $iam; installer = (Join-Path $artifacts "$setupName.exe") } |
     ConvertTo-Json | Set-Content -LiteralPath (Join-Path $BuildDirectory 'build-info.json')
 
 # 防止误把已有工作空间、日志或浏览器用户目录当作发布文件分发。
@@ -81,11 +88,12 @@ if (-not (Test-Path -LiteralPath (Join-Path $publishDirectory 'coreclr.dll'))) {
     throw 'The publish output is not self-contained.'
 }
 
-& $IsccPath '/Qp' "/DAppVersion=$version" "/DPublishDir=$publishDirectory" "/DWebViewBootstrapper=$bootstrapper" "/DOutputDir=$artifacts" (Join-Path $PSScriptRoot 'installer\TermLume.iss')
+& $IsccPath '/Qp' "/F$setupName" "/DAppVersion=$version" "/DPublishDir=$publishDirectory" "/DWebViewBootstrapper=$bootstrapper" "/DOutputDir=$artifacts" (Join-Path $PSScriptRoot 'installer\TermLume.iss')
 if ($LASTEXITCODE -ne 0) { throw 'Installer compilation failed.' }
 
-$installer = Join-Path $artifacts "TermLume-$version-win-x64-Setup.exe"
+$installer = Join-Path $artifacts "$setupName.exe"
 $checksum = (Get-FileHash -LiteralPath $installer -Algorithm SHA256).Hash.ToLowerInvariant()
+[IO.File]::WriteAllText(($installer + '.sha256'), "$checksum  $setupName.exe`n", [Text.UTF8Encoding]::new($false))
 Write-Host "Build directory: $BuildDirectory"
 Write-Host "Installer: $installer"
 Write-Host "SHA256: $checksum"

@@ -2,6 +2,12 @@
 
 TermLume 是一款支持 Windows 与 macOS 的 SSH / SFTP 桌面客户端，提供主机管理、多标签终端、双栏文件传输及本地工作空间。Windows 使用 WPF / WebView2；macOS 使用 Electron 桌面入口，两者复用 .NET 10、SSH.NET、xterm.js 和同一套工作台界面。macOS 构建与验收说明见下方「macOS 版本」。
 
+## Aegis-IAM 登录
+
+启动后必须先通过 Aegis-IAM 登录，才能使用工作空间。当前测试配置使用本地 Docker 环境 `http://localhost:18080` 和公共客户端 `termlume-desktop`，回调地址为 `http://127.0.0.1:47831/callback/`，允许 `openid profile email offline_access`。其他环境可在根目录 `aegis-iam.json` 中修改；正式分发前需配置实际 HTTPS 服务地址。配置、应用登记、会话与测试说明见 [Aegis-IAM 对接](docs/aegis-iam.md)。
+
+本地构建沿用 `TermLume-0.7.4-win-x64-Setup.exe` 文件名，包含本次源码中的账号登录功能，校验值见安装包同目录的 `.sha256` 文件。此前在 GitHub Releases 发布的 v0.7.4 安装包不包含该功能。
+
 ## 下载与安装（无需编译）
 
 **安装包统一发布在 [GitHub Releases](https://github.com/JasonZcl/TermLume/releases)。** 请在对应版本的 **Assets（资源）** 中按平台下载 Windows EXE 或 macOS DMG / ZIP；具体可用平台以实际发布的附件为准。`artifacts/` 仅用于本地构建输出，不上传到 Git；克隆仓库或下载源码 ZIP 不包含安装包。
@@ -29,7 +35,7 @@ TermLume 是一款支持 Windows 与 macOS 的 SSH / SFTP 桌面客户端，提�
 
 ### 校验安装包
 
-v0.7.4 安装包的 SHA-256 如下；其他版本或重新打包的文件，请以对应 Release 发布说明中的校验值为准：
+GitHub Releases 已发布的 v0.7.4 安装包 SHA-256 如下；本地重新打包的同名文件请使用构建输出或安装包同目录的 `.sha256` 文件核对：
 
 ```text
 42f15078ec808b802ccb1a0656a94ec177089e04bb80e651ff1aebde43a0384a
@@ -132,6 +138,8 @@ dotnet publish TermLume.Windows/TermLume.Windows.csproj -c Release -r win-x64 --
 ```powershell
 ./tools/Build-Installer.ps1
 ```
+
+安装包统一按 `TermLume-<版本>-win-x64-Setup.exe` 命名，并在同目录生成 `.sha256` 校验文件。发布目录中的 `aegis-iam.json` 会与仓库配置逐字节核对。
 
 脚本在系统临时目录生成自包含 win-x64 发布文件，校验 WebView2 引导程序的 Microsoft 签名，并校验内置 .NET / WPF 运行时与项目固定的 10.0.14 安全基线一致；`artifacts` 只输出 EXE 安装包，SHA-256 输出到控制台。应用与安装包当前未使用商业代码签名证书，Windows SmartScreen 可能提示发布者未知；分发时请同时提供 SHA-256 校验值。构建工具只需要 Inno Setup 编译器，不会自动安装到开发者的个人软件目录。自包含运行时不会随系统 .NET 自动升级，需要定期更新项目安全基线并重新打包。
 
@@ -263,9 +271,9 @@ SFTP 活动会记录连接结果、文件操作类型、传输方向和完成字
 - 同一地址和端口已有身份时，未信任的新密钥算法同样阻止连接，不会重新弹出首次信任提示；核验服务器变更后，需在已知主机中显式移除该端点旧记录再重新登记。已有多算法信任记录仍可正常核验。
 - 单个终端的 SSH 接收缓冲在分配前限制为 4 MiB，包含 PTY 建立阶段；超限仅断开对应会话。界面单批输出确认超过 30 秒也会断开连接，防止无响应界面长期占用连接资源。
 - WebView2 只加载本地虚拟域名资源，禁止外部导航、弹窗、下载和权限申请；页面采用 CSP，不从 CDN 加载脚本。终端输出交由 xterm.js 解析，不插入 HTML。
-- macOS 使用隔离、沙箱化的 Electron 页面，只加载随应用分发的 `termlume://app/` 资源；原生桥校验主窗口与主 frame、操作白名单和消息上限。后端通过子进程标准输入 / 输出通信，不监听本地网络端口；密码由独立受限窗口交给连接后端，不注入主工作台。
+- macOS 使用隔离、沙箱化的 Electron 页面，只加载随应用分发的 `termlume://app/` 资源；原生桥校验主窗口与主 frame、操作白名单和消息上限。后端通过子进程标准输入 / 输出通信，仅在账号登录期间开启 IPv4 回环回调端口；密码由独立受限窗口交给连接后端，不注入主工作台。
 - 将配置备份到安全位置。应用退出后可复制 / 恢复 `workspace.json`。损坏的配置会阻止启动，不会被静默覆盖。
-- 不含遥测或应用层云端请求；WebView2 Runtime 自身由 Microsoft 管理。
+- 账号登录、续期、资料校验和退出会请求配置的 Aegis-IAM 服务；访问和 ID 令牌仅保存在后端内存，刷新凭据安全保存在 Windows 凭据管理器 / macOS 钥匙串。正常关闭后重新打开会自动向 IAM 验证并恢复会话；退出登录会清除本机凭据并请求服务端撤销。不上传主机、片段或日志，不含遥测。WebView2 Runtime 自身由 Microsoft 管理。
 
 ## 当前范围
 

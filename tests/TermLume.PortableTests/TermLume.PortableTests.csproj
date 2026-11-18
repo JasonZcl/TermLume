@@ -11,6 +11,7 @@
     <ProjectReference Include="../../TermLume.Shared/TermLume.Shared.csproj" />
     <Compile Include="../TermLume.SecurityTests/Program.cs" Link="Program.cs" />
     <Compile Include="../TermLume.SecurityTests/WorkspaceControllerTests.cs" Link="WorkspaceControllerTests.cs" />
+    <Compile Include="../TermLume.SecurityTests/TestAccount.cs" Link="TestAccount.cs" />
     <None Include="../TermLume.SecurityTests/ssh_fixture.py" Link="ssh_fixture.py" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 </Project>

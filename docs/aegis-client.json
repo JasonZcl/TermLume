@@ -1,0 +1,7 @@
+{
+  "clientId": "termlume-desktop",
+  "name": "TermLume Desktop",
+  "redirectUris": ["http://127.0.0.1:47831/callback/"],
+  "scopes": ["openid", "profile", "email", "offline_access"],
+  "isPublic": true
+}

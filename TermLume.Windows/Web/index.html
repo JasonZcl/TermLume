@@ -10,6 +10,7 @@
   <link rel="stylesheet" href="styles.css">
   <link rel="stylesheet" href="settings.css">
   <link rel="stylesheet" href="sftp.css">
+  <link rel="stylesheet" href="authentication.css">
   <script src="vendor/xterm.js" defer></script>
   <script src="vendor/addon-fit.js" defer></script>
   <script src="platform.js" defer></script>
@@ -19,9 +20,10 @@
   <script src="settings.js" defer></script>
   <script src="sftp.js" defer></script>
   <script src="snippets.js" defer></script>
+  <script src="authentication.js" defer></script>
   <script src="app.js" defer></script>
 </head>
-<body>
+<body class="authentication-required">
 <svg class="icon-library" aria-hidden="true" xmlns="http://www.w3.org/2000/svg"><defs>
   <symbol id="i-transfer" viewBox="0 0 24 24"><path d="M4 8h16m-4-4 4 4-4 4M20 16H4m4-4-4 4 4 4"/></symbol>
   <symbol id="i-upload" viewBox="0 0 24 24"><path d="M12 16V3m-5 5 5-5 5 5M4 16v5h16v-5"/></symbol>
@@ -84,7 +86,7 @@
     </nav>
     <div class="nav-label group-label"><span>主机分组</span><button class="icon-button" data-action="newGroup" title="新建分组" aria-label="新建分组"><svg class="icon"><use href="#i-plus"/></svg></button></div>
     <div id="groups" class="groups"></div>
-    <div class="sidebar-bottom"><div class="local-note"><svg class="icon"><use href="#i-lock"/></svg><div><strong>本地工作空间</strong><p>配置只保存在此设备</p></div></div><button class="nav-item" data-view="settings"><svg class="icon"><use href="#i-settings"/></svg><span>设置</span><span class="version">v0.7.4</span></button></div>
+    <div class="sidebar-bottom"><button class="nav-item account-button" data-action="account"><svg class="icon"><use href="#i-shield"/></svg><span id="account-name">账号</span></button><div class="local-note"><svg class="icon"><use href="#i-lock"/></svg><div><strong>本地工作空间</strong><p>配置只保存在此设备</p></div></div><button class="nav-item" data-view="settings"><svg class="icon"><use href="#i-settings"/></svg><span>设置</span><span class="version">v0.7.4</span></button></div>
   </aside>
   <main class="main">
     <span class="sr-only" id="breadcrumb-label">所有主机</span>
@@ -96,6 +98,7 @@
     <footer class="statusbar"><span><span class="status-dot"></span><span id="footer-status">工作空间就绪</span></span><span id="footer-right">SSH · 端到端加密连接</span></footer>
   </main>
 </div>
+<section id="authentication-gate" class="authentication-gate" aria-label="账号登录"></section>
 <dialog id="editor-dialog"><form id="editor-form"></form></dialog>
 <dialog id="confirm-dialog"><div class="dialog-heading"><div><div class="eyebrow">PLEASE CONFIRM</div><h2 id="confirm-title"></h2></div></div><p id="confirm-description" class="confirm-description"></p><div class="dialog-footer"><button class="secondary-button" id="confirm-cancel">取消</button><button class="primary-button" id="confirm-accept">确认</button></div></dialog>
 <div id="toast" role="status" aria-live="polite"></div>

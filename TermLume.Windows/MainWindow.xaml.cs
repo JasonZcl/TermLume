@@ -3,7 +3,6 @@ using System.IO;
 using System.Text.Json;
 using System.Windows;
 using Microsoft.Web.WebView2.Core;
-using Microsoft.Win32;
 using TermLume.Shared.Application;
 using TermLume.Windows.Platform;
 using TermLume.Shared.Services;
@@ -89,15 +88,9 @@ public partial class MainWindow : Window
             if (string.IsNullOrEmpty(requestId) || requestId.Length > 100) throw new InvalidDataException("请求标识无效。");
             var operation = request.GetProperty("op").GetString();
             var payload = request.GetProperty("payload");
-            if (operation is "window" or "pickKey" or "copy" or "paste")
+            if (operation == "window")
             {
-                object? result = operation switch
-                {
-                    "window" => ControlWindow(payload.GetProperty("action").GetString()),
-                    "pickKey" => PickKey(),
-                    "copy" => Copy(payload.GetProperty("text").GetString() ?? ""),
-                    _ => Clipboard.ContainsText() ? Clipboard.GetText() : ""
-                };
+                var result = ControlWindow(payload.GetProperty("action").GetString());
                 Post(new { type = "reply", id = requestId, ok = true, result });
                 return;
             }
@@ -130,14 +123,6 @@ public partial class MainWindow : Window
         }
         return new { maximized = WindowState == WindowState.Maximized };
     }
-
-    private string? PickKey()
-    {
-        var dialog = new OpenFileDialog { Title = Localization.Text("选择 SSH 私钥"), Filter = Localization.Text("所有文件|*.*"), CheckFileExists = true };
-        return dialog.ShowDialog(this) == true ? dialog.FileName : null;
-    }
-
-    private static bool Copy(string text) { Clipboard.SetText(text); return true; }
 
     private void Post(object message)
     {

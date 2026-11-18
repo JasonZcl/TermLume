@@ -1,0 +1,5 @@
+{
+  "issuer": "http://localhost:18080",
+  "clientId": "termlume-desktop",
+  "redirectUri": "http://127.0.0.1:47831/callback/"
+}

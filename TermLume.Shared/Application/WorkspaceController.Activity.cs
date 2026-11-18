@@ -44,10 +44,12 @@ public sealed partial class WorkspaceController
 
     private async Task<bool> ExportLogsAsync(JsonElement payload)
     {
+        var generation = authentication.Generation;
         var ids = payload.GetProperty("ids").Deserialize<List<string>>(WorkspaceStore.JsonOptions) ?? [];
         var entries = activityLog.Select(ids);
         if (entries.Count == 0) throw new InvalidDataException("没有可导出的日志，请刷新列表后重试。");
         var selected = await host.RequestAsync<string>("exportLogs", new { title = Localization.Text("导出筛选后的日志"), name = $"TermLume-logs-{DateTime.Now:yyyyMMdd-HHmmss}.json" });
+        RequireAuthenticationGeneration(generation);
         if (selected is null) return false;
         var target = Path.GetFullPath(selected);
         // 导出是独立副本，不能通过保存对话框覆盖应用正在使用的配置或日志。

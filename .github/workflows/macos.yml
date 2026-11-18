@@ -11,6 +11,7 @@ on:
       - 'tests/**'
       - 'vendor/packages/**'
       - 'NuGet.config'
+      - 'aegis-iam.json'
       - '.github/workflows/macos.yml'
 
 permissions:
@@ -51,6 +52,8 @@ jobs:
           npm --prefix desktop test
       - name: SSH and SFTP regressions
         run: dotnet run --project tests/TermLume.PortableTests -c Release -r osx-${{ matrix.architecture }}
+      - name: Aegis-IAM authentication regressions
+        run: dotnet run --project tests/TermLume.AuthenticationTests -c Release -r osx-${{ matrix.architecture }}
       - name: Stdio bridge integration
         run: npm --prefix desktop run test:backend
       - name: Isolated native desktop smoke test

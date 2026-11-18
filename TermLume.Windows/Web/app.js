@@ -32,7 +32,7 @@ function updateWindowState(maximized) {
 
 document.addEventListener('click', async event => {
   const navigation = event.target.closest('[data-view]');
-  if (navigation) return showView(navigation.dataset.view);
+  if (navigation && ready) return showView(navigation.dataset.view);
   const button = event.target.closest('[data-action]');
   if (!button || button.disabled) return;
   const { action, id } = button.dataset;
@@ -192,7 +192,7 @@ function request(op, payload = {}, additionalObjects = null) {
   const id = crypto.randomUUID();
   return new Promise((resolve, reject) => {
     // 超时只结束页面等待，不代表原生连接或传输已取消；取消须发送相应操作。
-    const timeout = setTimeout(() => { pending.delete(id); reject(new Error(t('操作等待超时，请检查连接状态。'))); }, ['connect', 'exportLogs'].includes(op) || op.startsWith('sftp') ? 600000 : 30000);
+    const timeout = setTimeout(() => { pending.delete(id); reject(new Error(t('操作等待超时，请检查连接状态。'))); }, ['connect', 'exportLogs', 'authLogin'].includes(op) || op.startsWith('sftp') ? 600000 : 30000);
     pending.set(id, { resolve, reject, timeout });
     try {
       if (additionalObjects) {
@@ -205,7 +205,9 @@ function request(op, payload = {}, additionalObjects = null) {
 
 bridge?.addEventListener('message', event => {
   const message = event.data;
-  if (message.type === 'sftpEnded') {
+  if (message.type === 'authenticationChanged') {
+    receiveAuthentication(message.authentication);
+  } else if (message.type === 'sftpEnded') {
     onSftpEnded(message);
   } else if (message.type === 'sftpProgress') {
     onSftpProgress(message.job);
@@ -222,7 +224,12 @@ bridge?.addEventListener('message', event => {
     clearTimeout(callback.timeout);
     pending.delete(message.id);
     if (message.ok) callback.resolve(message.result);
-    else callback.reject(new Error(message.error));
+    else {
+      if (message.errorCode === 'authentication_required') {
+        receiveAuthentication({ ...authenticationState, isAuthenticated: false, user: null, expiresAt: null });
+      }
+      callback.reject(new Error(message.error));
+    }
   } else if (message.type === 'output') {
     // 在 xterm.js 完成写入后确认，配合原生读取线程形成输出背压。
     sessions.get(message.sessionId)?.terminal.write(message.data, () => request('ack', { sessionId: message.sessionId }).catch(() => {}));
@@ -288,6 +295,7 @@ function updateFooter() {
 }
 
 function showView(view, group = null) {
+  if (!ready) return;
   currentView = view;
   currentGroup = group;
   activeSession = null;
@@ -556,8 +564,7 @@ function openSnippetEditor(snippet = {}) {
 new ResizeObserver(() => fitActiveTerminal()).observe($('#terminals'));
 renderTabs();
 renderSidebar();
-renderPage();
-Promise.all([request('workspace'), localeReady]).then(([value]) => { ready = true; refreshWorkspace(value); if (localeLoadError) toast(t('语言资源加载失败，请检查安装文件后重启应用。'), true); }).catch(error => toast(error.message, true));
+initializeAuthentication();
 request('window', { action: 'state' }).then(result => updateWindowState(result.maximized)).catch(() => {});
 document.querySelectorAll('.nav-item').forEach(button => {
   button.title = button.querySelector('span')?.textContent || '';

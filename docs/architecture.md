@@ -14,7 +14,7 @@ macOS:   Web UI → Electron → JSON Lines → Backend ┘
 - **共享界面**：`TermLume.Windows/Web` 保存 HTML、CSS、原生 JavaScript 和本地 xterm.js 资源。`platform.js` 处理平台显示差异，`i18n.js` 处理中英文切换。
 - **共享核心**：`TermLume.Shared` 是 `net10.0` 类库，由 Windows 应用和后端通过 `ProjectReference` 引用。模型、服务与请求处理只有一份实现，不使用链接编译来复制核心源码。
 - **Windows 入口**：`TermLume.Windows` 是 WPF / WebView2 应用，负责窗口、系统剪贴板、文件选择和原生对话框。
-- **macOS 入口**：`desktop` 负责 Electron 窗口与系统能力；`TermLume.DesktopBackend` 只负责启动核心、JSON Lines 通信和工作区线程调度，不启动本地网络服务。
+- **macOS 入口**：`desktop` 负责 Electron 窗口与系统能力；`TermLume.DesktopBackend` 只负责启动核心、JSON Lines 通信和工作区线程调度，除账号登录期间的 IPv4 回环回调外，不启动本地网络服务。
 
 ## 核心目录
 
@@ -31,12 +31,12 @@ macOS:   Web UI → Electron → JSON Lines → Backend ┘
 
 ### 原生交互
 
-`IWorkspaceHost.Send` 发送请求回复和状态事件；`RequestAsync` 请求凭据、首次信任确认、安全提醒、文件夹选择和日志保存位置。
+`IWorkspaceHost.Send` 发送请求回复和状态事件；`RequestAsync` 请求凭据、首次信任确认、安全提醒、文件夹选择、日志保存位置、剪贴板读写和私钥文件选择。
 
 - Windows 的 `Platform/WindowsWorkspaceHost` 调用 WPF 原生窗口和系统文件对话框。
 - 后端的 `DesktopRpc` 发送 `hostRequest`，Electron 主进程执行原生操作，再通过 `hostReply` 返回结果。
 - 密码取消返回 `null`；空字符串仅表示用户明确提交空口令。原生适配器不得保存凭据或将凭据写入配置、日志、命令行参数。
-- 系统剪贴板、窗口控制和私钥文件选择仍属于桌面壳，不放进核心。
+- 系统剪贴板和私钥文件选择由共享控制器统一鉴权后调用桌面壳；原生实现保留在平台适配器。窗口控制由桌面壳直接处理。
 
 ### 调度与退出
 
@@ -82,3 +82,7 @@ npm --prefix desktop run test:desktop
 ```
 
 macOS 的 PortableTests 使用 `-r osx-arm64` 或 `-r osx-x64`。共享控制器测试使用临时目录和模拟原生适配器，覆盖旧数据读取、主机 / 分组 / 片段、偏好回滚、凭据取消、文件边界、导出保护和退出状态；SSH / SFTP 集成测试只连接隔离的本地测试服务器。Windows 测试或交叉编译不能代替 macOS 真机安装和系统交互验收。
+
+## 账号认证
+
+共享核心的 `AegisAuthentication` 管理 OIDC 授权码 / PKCE、签名校验、刷新轮换、UserInfo 校验和撤销，令牌不进入 Web 界面。`IAegisSessionStore` 保存与 issuer、client ID 和账号绑定的刷新凭据；生产实现 `SystemAegisSessionStore` 调用 Windows 凭据管理器或 macOS 钥匙串，不依赖 WPF 或 Electron。按数据目录隔离的进程锁防止多个实例消费同一刷新凭据，数据目录内仅保存无令牌的启用标记。启动时使用保存的凭据刷新并完成签名与 UserInfo 校验后才解锁；关闭仅释放会话，退出登录则删除系统凭据并请求服务端撤销。`WorkspaceController` 在处理所有工作区操作前检查账号授权；退出或失效会关闭 SSH / SFTP。`IWorkspaceAuthentication` 和 `IAegisSessionStore` 供隔离测试替换依赖，两个生产入口始终使用真实 Aegis 实现，没有免登录开关。Windows / Electron 负责打开系统浏览器。部署与协议说明见 [Aegis-IAM 对接](aegis-iam.md)。

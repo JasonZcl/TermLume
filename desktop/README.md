@@ -1,6 +1,6 @@
 # TermLume macOS 桌面入口
 
-Windows 正式入口仍为 `TermLume.Windows/TermLume.Windows.csproj`，原有安装器和用户目录不变。此目录提供 macOS 桌面壳，复用 `../TermLume.Windows/Web`，通过标准输入 / 输出 JSON Lines 与 `TermLume.DesktopBackend` 通信；不运行本地 HTTP / WebSocket 服务，不从渲染页直接访问 Node.js 或 SSH 库。
+Windows 正式入口仍为 `TermLume.Windows/TermLume.Windows.csproj`，原有安装器和用户目录不变。此目录提供 macOS 桌面壳，复用 `../TermLume.Windows/Web`，通过标准输入 / 输出 JSON Lines 与 `TermLume.DesktopBackend` 通信；仅在账号登录期间开启 IPv4 回环回调，不从渲染页直接访问 Node.js 或 SSH 库。使用前必须配置 Aegis-IAM 公共客户端，详见 [登录对接](../docs/aegis-iam.md)。
 
 ## 开发与构建
 
@@ -26,6 +26,7 @@ npm test
 npm run test:backend
 npm run test:desktop
 dotnet run --project ../tests/TermLume.PortableTests -c Release -r osx-arm64
+dotnet run --project ../tests/TermLume.AuthenticationTests -c Release -r osx-arm64
 # Intel 将运行时改为 osx-x64
 ```
 

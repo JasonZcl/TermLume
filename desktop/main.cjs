@@ -1,11 +1,11 @@
 'use strict';
 
-const { app, BrowserWindow, Menu, ipcMain, dialog, clipboard, protocol, net, session } = require('electron');
+const { app, BrowserWindow, Menu, ipcMain, dialog, clipboard, protocol, net, session, shell } = require('electron');
 const path = require('node:path');
 const fs = require('node:fs');
 const { pathToFileURL } = require('node:url');
 const { Backend } = require('./backend.cjs');
-const { pageUrl, credentialUrl, trustedFrame, validateRequest, resourcePath } = require('./security.cjs');
+const { pageUrl, credentialUrl, trustedFrame, validateRequest, resourcePath, authorizationUrl } = require('./security.cjs');
 
 protocol.registerSchemesAsPrivileged([{ scheme: 'termlume', privileges: { standard: true, secure: true, supportFetchAPI: true, corsEnabled: true } }]);
 const dataDirectory = path.join(app.getPath('appData'), 'TermLume');
@@ -90,6 +90,13 @@ function refreshMenu() {
 async function hostRequest(operation, payload = {}) {
   if (closed || !mainWindow || mainWindow.isDestroyed()) return null;
   switch (operation) {
+    case 'openBrowser': await shell.openExternal(authorizationUrl(payload.url)); return true;
+    case 'copy': clipboard.writeText(payload.text); return true;
+    case 'paste': return clipboard.readText();
+    case 'pickKey': return enqueuePrompt(async () => {
+      const selected = await dialog.showOpenDialog(mainWindow, { title: text('选择 SSH 私钥', 'Select an SSH private key'), properties: ['openFile', 'showHiddenFiles'] });
+      return selected.canceled ? null : selected.filePaths[0];
+    });
     case 'credential': return styledPrompt({ ...payload, mode: 'credential' });
     case 'pickFolder': return enqueuePrompt(async () => {
       const result = await dialog.showOpenDialog(mainWindow, { title: payload.title, properties: ['openDirectory'] });
@@ -114,14 +121,6 @@ ipcMain.handle('termlume:request', async (event, message) => {
   if (closing) throw new Error(text('应用正在退出。', 'The application is closing.'));
   let result;
   switch (request.op) {
-    case 'copy':
-      if (typeof request.payload.text !== 'string' || request.payload.text.length > 1024 * 1024) throw new Error('Invalid clipboard text');
-      clipboard.writeText(request.payload.text); result = true; break;
-    case 'paste': result = clipboard.readText(); break;
-    case 'pickKey': result = await enqueuePrompt(async () => {
-      const selected = await dialog.showOpenDialog(mainWindow, { title: text('选择 SSH 私钥', 'Select an SSH private key'), properties: ['openFile', 'showHiddenFiles'] });
-      return selected.canceled ? null : selected.filePaths[0];
-    }); break;
     case 'window':
       switch (request.payload.action) {
         case 'minimize': mainWindow.minimize(); break;

@@ -32,12 +32,14 @@ public sealed partial class WorkspaceController
 
     private async Task<object?> HandleSftpAsync(string operation, JsonElement payload)
     {
+        var generation = authentication.Generation;
         if (operation == "sftpConnect") return await ConnectSftpAsync(payload);
         if (operation == "sftpDefaultLocal")
         {
             var previousBrowser = localFiles;
             var browser = LocalFileBrowser.ForComputer();
             var listing = await Task.Run(() => browser.List(browser.Root));
+            RequireAuthenticationGeneration(generation);
             // 默认磁盘列表异步返回时，不能覆盖用户刚刚通过对话框选择的目录作用域。
             if (ReferenceEquals(localFiles, previousBrowser)) localFiles = browser;
             return listing;
@@ -45,9 +47,11 @@ public sealed partial class WorkspaceController
         if (operation == "sftpPickLocal")
         {
             var selected = await host.RequestAsync<string>("pickFolder", new { title = Localization.Text("选择 SFTP 本地文件夹") });
+            RequireAuthenticationGeneration(generation);
             if (selected is null || shuttingDown) return null;
             var browser = new LocalFileBrowser(selected);
             var listing = await Task.Run(() => browser.List(browser.Root));
+            RequireAuthenticationGeneration(generation);
             localFiles = browser;
             return listing;
         }
@@ -82,10 +86,12 @@ public sealed partial class WorkspaceController
 
     private async Task<object> ConnectSftpAsync(JsonElement payload)
     {
+        var generation = authentication.Generation;
         if (sftpSessions.Count >= 4) throw new InvalidOperationException("最多同时打开 4 个 SFTP 连接。");
         var host = GetHost(payload.GetProperty("hostId").GetString()!);
         var id = Guid.NewGuid().ToString("N");
         var secret = await RequestSecretAsync(host, true);
+        RequireAuthenticationGeneration(generation);
         if (secret is null)
         {
             Record("sftp.cancelled", "用户取消 SFTP 认证。", host, id, level: "warning");
@@ -96,7 +102,7 @@ public sealed partial class WorkspaceController
         SftpSession? session = null;
         try
         {
-            session = new SftpSession(host, secret, key => VerifyHostKey(host, key, id));
+            session = new SftpSession(host, secret, key => VerifyHostKey(host, key, id, generation));
             session.Ended += () => Dispatcher.BeginInvoke(() =>
             {
                 if (shuttingDown || !sftpSessions.ContainsKey(id)) return;
@@ -106,6 +112,7 @@ public sealed partial class WorkspaceController
             });
             sftpSessions.Add(id, session);
             var listing = await session.ConnectAsync();
+            RequireAuthenticationGeneration(generation);
             if (shuttingDown || !sftpSessions.ContainsKey(id)) throw new OperationCanceledException();
             Record("sftp.connected", "SFTP 连接成功。", host, id);
             return new { sessionId = id, hostId = host.Id, listing };
@@ -149,6 +156,7 @@ public sealed partial class WorkspaceController
 
     private async Task<object> StartDroppedUploadsAsync(JsonElement payload, IReadOnlyList<string> nativePaths)
     {
+        var generation = authentication.Generation;
         var sessionId = payload.GetProperty("sessionId").GetString()!;
         if (!sftpSessions.TryGetValue(sessionId, out var session)) throw new InvalidOperationException("SFTP 会话已断开，请重新连接。");
         if (nativePaths.Count == 0 || nativePaths.Count > 100 - transferJobs.Count)
@@ -162,6 +170,7 @@ public sealed partial class WorkspaceController
             var name = Path.GetFileName(path);
             return (Browser: browser, Path: path, Name: name, Remote: SftpSession.Join(directory, name));
         }).ToArray());
+        RequireAuthenticationGeneration(generation);
         if (files.Select(file => file.Name).Distinct(StringComparer.Ordinal).Count() != files.Length)
             throw new InvalidDataException("拖入的文件包含重复名称，请分开上传。");
         // 文件检查期间用户可能已断开连接或增加任务；整批入队前再次核验会话和容量。

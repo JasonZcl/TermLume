@@ -9,6 +9,7 @@ const crypto = require('node:crypto');
 const { spawn } = require('node:child_process');
 const { setTimeout: delay } = require('node:timers/promises');
 const { Backend } = require('../backend.cjs');
+const { createOidcFixture } = require('../../tests/oidc-fixture.cjs');
 
 async function until(predicate, milliseconds = 15000) {
   const limit = Date.now() + milliseconds;
@@ -22,6 +23,13 @@ test('stdio bridge preserves SSH, SFTP, credentials, trust, logs and saved data'
   let errors = '';
   fixture.stderr.on('data', chunk => { errors += chunk.toString(); });
   let backend;
+  const oidc = await createOidcFixture();
+  const originalIssuer = process.env.TERMLUME_IAM_ISSUER;
+  const originalClient = process.env.TERMLUME_IAM_CLIENT_ID;
+  const originalRedirect = process.env.TERMLUME_IAM_REDIRECT_URI;
+  process.env.TERMLUME_IAM_ISSUER = oidc.issuer;
+  process.env.TERMLUME_IAM_CLIENT_ID = 'termlume-desktop';
+  process.env.TERMLUME_IAM_REDIRECT_URI = await oidc.callbackUri();
   try {
     await until(() => { if (fixture.exitCode !== null) throw new Error(errors); return fs.existsSync(path.join(root, 'port.txt')); });
     const port = Number(fs.readFileSync(path.join(root, 'port.txt'), 'utf8'));
@@ -36,6 +44,7 @@ test('stdio bridge preserves SSH, SFTP, credentials, trust, logs and saved data'
       if (message.type === 'output') void backend.request({ id: 'ack', op: 'ack', payload: { sessionId: message.sessionId } });
     }, async (operation, payload) => {
       prompts.push({ operation, payload });
+      if (operation === 'openBrowser') { await oidc.openBrowser(payload.url); return true; }
       if (operation === 'credential') return secret;
       if (operation === 'trustHost') return true;
       if (operation === 'pickFolder') return root;
@@ -47,6 +56,9 @@ test('stdio bridge preserves SSH, SFTP, credentials, trust, logs and saved data'
       assert.equal(reply.ok, true, reply.error);
       return reply.result;
     };
+    const denied = await backend.request({ id: 'before-login', op: 'workspace', payload: {} });
+    assert.equal(denied.ok, false); assert.equal(denied.errorCode, 'authentication_required');
+    await call('authLogin');
     const workspace = await call('workspace');
     assert.equal(workspace.hosts.length, 0);
     await call('saveGroup', { name: 'Synthetic group' });
@@ -96,20 +108,40 @@ test('stdio bridge preserves SSH, SFTP, credentials, trust, logs and saved data'
     const caseVariant = await backend.request({ id: 'case-variant-export', op: 'exportLogs', payload: { ids: entries.map(entry => entry.id) } });
     assert.equal(caseVariant.ok, false);
     assert.deepEqual(fs.readFileSync(path.join(dataDirectory, 'workspace.json')), before);
-    await call('sftpDisconnect', { sessionId: sftp.sessionId });
+    await backend.close();
+    await until(() => backend.stopped);
+    let reopenBrowserCalls = 0;
+    backend = new Backend(executable, dataDirectory, () => {}, async () => { reopenBrowserCalls++; throw new Error('Restoration must not open an interactive prompt'); }, () => {});
+    const restored = (await call('authStatus')).authentication;
+    assert.equal(restored.isAuthenticated, true);
+    assert.equal(restored.user.subject, 'synthetic-subject');
+    assert.equal((await call('workspace')).hosts[0].id, hostId);
+    assert.equal(reopenBrowserCalls, 0);
+    const signedOut = await call('authLogout');
+    assert.equal(signedOut.revocationSucceeded, true);
+    assert.deepEqual(await call('status'), { ssh: 0, sftp: 0, transfers: 0 });
+    assert.equal((await backend.request({ id: 'after-logout', op: 'workspace', payload: {} })).errorCode, 'authentication_required');
     await backend.close();
     await until(() => backend.stopped);
     for (const name of ['workspace.json', 'activity-log.json']) assert.ok(!fs.readFileSync(path.join(dataDirectory, name), 'utf8').includes('test-only'));
-    backend = new Backend(executable, dataDirectory, () => {}, () => null, () => {});
+    backend = new Backend(executable, dataDirectory, () => {}, async (operation, payload) => { if (operation === 'openBrowser') { await oidc.openBrowser(payload.url); return true; } return null; }, () => {});
+    assert.equal((await call('authStatus')).authentication.isAuthenticated, false);
+    await call('authLogin');
     assert.equal((await call('workspace')).hosts[0].id, hostId);
     assert.equal((await call('knownHosts')).length, 1);
+    await call('authLogout');
     await backend.close();
     await until(() => backend.stopped);
     console.log(`Isolated bridge data: ${root}`);
+    assert.deepEqual(oidc.browserErrors, []);
   } finally {
     if (backend && !backend.stopped) { backend.child.stdin.end(); await until(() => backend.stopped, 5000).catch(() => backend.child.kill()); }
     fixture.stdin.end('stop\n');
     await until(() => fixture.exitCode !== null, 5000).catch(() => fixture.kill());
+    await oidc.close();
+    if (originalIssuer === undefined) delete process.env.TERMLUME_IAM_ISSUER; else process.env.TERMLUME_IAM_ISSUER = originalIssuer;
+    if (originalClient === undefined) delete process.env.TERMLUME_IAM_CLIENT_ID; else process.env.TERMLUME_IAM_CLIENT_ID = originalClient;
+    if (originalRedirect === undefined) delete process.env.TERMLUME_IAM_REDIRECT_URI; else process.env.TERMLUME_IAM_REDIRECT_URI = originalRedirect;
   }
 });
 
