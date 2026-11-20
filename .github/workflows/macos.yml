@@ -12,6 +12,7 @@ on:
       - 'vendor/packages/**'
       - 'NuGet.config'
       - 'aegis-iam.json'
+      - 'workspace-api.json'
       - '.github/workflows/macos.yml'
 
 permissions:

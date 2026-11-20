@@ -24,6 +24,7 @@ test('renderer cannot invoke shutdown, native host calls or spoof file-drop path
   assert.throws(() => validateRequest({ id: 'test', op: 'input', payload: { data: 'a'.repeat(2 * 1024 * 1024) } }));
   assert.throws(() => validateRequest({ id: 'test', op: 'workspace', payload: [] }));
   assert.throws(() => validateRequest({ id: '', op: 'workspace', payload: {} }));
+  for (const op of ['workspaceSync', 'importLegacyWorkspace']) assert.equal(validateRequest({ id: 'test', op, payload: {} }).op, op);
 });
 
 test('login opens only HTTPS or loopback HTTP authorization URLs', () => {

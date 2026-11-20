@@ -6,9 +6,10 @@
     <Nullable>enable</Nullable>
     <RuntimeIdentifier>win-x64</RuntimeIdentifier>
     <SelfContained>true</SelfContained>
-    <RuntimeFrameworkVersion>10.0.14</RuntimeFrameworkVersion>
+    <RuntimeFrameworkVersion>10.0.15</RuntimeFrameworkVersion>
   </PropertyGroup>
   <ItemGroup>
+    <Compile Include="../LocalTestWorkspaceSynchronization.cs" Link="LocalTestWorkspaceSynchronization.cs" />
     <ProjectReference Include="../../TermLume.Shared/TermLume.Shared.csproj" />
     <None Include="ssh_fixture.py" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>

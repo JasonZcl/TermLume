@@ -14,8 +14,15 @@ if ($version -notmatch '^\d+\.\d+\.\d+$') {
     throw "Expected a three-part app version, got: $version"
 }
 $setupName = "TermLume-$version-win-x64-Setup"
+# The API has its own release cycle; only desktop components share the installer version.
+foreach ($name in @('TermLume.Shared','TermLume.DesktopBackend')) {
+    $metadata = [xml](Get-Content -LiteralPath (Join-Path $repository ($name + '/' + $name + '.csproj')) -Raw)
+    if ([string]$metadata.Project.PropertyGroup.Version -ne $version) { throw "Version mismatch in $name." }
+}
+$desktopMetadata = Get-Content -LiteralPath (Join-Path $repository 'desktop/package.json') -Raw | ConvertFrom-Json
+if ($desktopMetadata.version -ne $version) { throw 'Electron package version must match the Windows installer.' }
 $runtimeVersion = [version]$project.Project.PropertyGroup.RuntimeFrameworkVersion
-if ($runtimeVersion -lt [version]'10.0.14') { throw 'The self-contained runtime must meet the .NET 10.0.14 security baseline.' }
+if ($runtimeVersion -lt [version]'10.0.15') { throw 'The self-contained runtime must meet the .NET 10.0.15 security baseline.' }
 
 if (-not $IsccPath) {
     $compiler = Get-Command ISCC.exe -ErrorAction SilentlyContinue
@@ -76,12 +83,18 @@ if (-not (Test-Path -LiteralPath $iamPath -PathType Leaf) -or
     throw 'Published Aegis-IAM configuration is missing or differs from the repository configuration.'
 }
 $iam = Get-Content -LiteralPath $iamPath -Raw | ConvertFrom-Json
-@{ version = $version; runtimeVersion = $runtimeVersion.ToString(); publish = $publishDirectory; bootstrapper = $bootstrapper; iam = $iam; installer = (Join-Path $artifacts "$setupName.exe") } |
+$workspaceApiPath = Join-Path $publishDirectory 'workspace-api.json'
+if (-not (Test-Path -LiteralPath $workspaceApiPath -PathType Leaf) -or
+    (Get-FileHash -LiteralPath $workspaceApiPath).Hash -ne (Get-FileHash -LiteralPath (Join-Path $repository 'workspace-api.json')).Hash) {
+    throw 'Published workspace API configuration is missing or differs from the repository configuration.'
+}
+$workspaceApi = Get-Content -LiteralPath $workspaceApiPath -Raw | ConvertFrom-Json
+@{ version = $version; runtimeVersion = $runtimeVersion.ToString(); publish = $publishDirectory; bootstrapper = $bootstrapper; iam = $iam; workspaceApi = $workspaceApi; installer = (Join-Path $artifacts "$setupName.exe") } |
     ConvertTo-Json | Set-Content -LiteralPath (Join-Path $BuildDirectory 'build-info.json')
 
 # 防止误把已有工作空间、日志或浏览器用户目录当作发布文件分发。
 $unexpectedData = Get-ChildItem -LiteralPath $publishDirectory -Recurse -Force | Where-Object {
-    $_.Name -in @('workspace.json', 'activity-log.json', 'WebView2')
+    $_.Name -in @('workspace.json', 'activity-log.json', 'WebView2', '.local', 'database.local.json', 'api-settings.local.json', 'migration-settings.local.json', 'pending-changes.json', 'selected-workspace.json', 'device-id.json', 'device-preferences.json', 'activity-synced.json')
 }
 if ($unexpectedData) { throw 'User data must never be included in the installer payload.' }
 if (-not (Test-Path -LiteralPath (Join-Path $publishDirectory 'coreclr.dll'))) {

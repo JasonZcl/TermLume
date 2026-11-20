@@ -13,7 +13,7 @@ internal static class AuthenticationBoundaryTests
             var directory = Path.Combine(root, replaceAccount ? "account-replaced" : "logout");
             using var authentication = new DelayedAuthentication();
             var host = new RecordingHost();
-            var controller = new WorkspaceController(directory, host, new Dispatcher(), authentication);
+            var controller = new WorkspaceController(directory, host, new Dispatcher(), authentication, new LocalTestWorkspaceSynchronization());
             Task? logout = null;
             try
             {
@@ -62,7 +62,7 @@ internal static class AuthenticationBoundaryTests
             nativeCalls.Add(operation);
             return Task.FromResult<object?>(operation switch { "copy" => true, "paste" => "synthetic clipboard", "pickKey" => null, _ => throw new InvalidOperationException(operation) });
         } };
-        var controller = new WorkspaceController(directory, host, new Dispatcher(), authentication);
+        var controller = new WorkspaceController(directory, host, new Dispatcher(), authentication, new LocalTestWorkspaceSynchronization());
         async Task<JsonElement> Call(string operation, object? payload = null)
         {
             var id = Guid.NewGuid().ToString("N");

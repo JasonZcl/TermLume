@@ -14,6 +14,7 @@ public sealed class WorkspaceStore
         : Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "TermLume");
     private readonly string directory;
     private readonly string filePath;
+    public string DirectoryPath => directory;
 
     // 测试可注入隔离目录，避免访问真实用户工作空间。
     public WorkspaceStore(string? dataDirectory = null)

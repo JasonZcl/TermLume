@@ -29,7 +29,7 @@ async Task RejectAsync(Func<Task> action, string description)
     catch (IOException) { Check(true, description); return; }
     throw new InvalidOperationException("FAILED: " + description);
 }
-Check(Environment.Version == new Version(10, 0, 14), "Regressions execute on the pinned .NET 10.0.14 runtime");
+Check(Environment.Version == new Version(10, 0, 15), "Regressions execute on the pinned .NET 10.0.15 runtime");
 
 var freshPreferences = PreferenceSettings.Normalize(new Preferences());
 Check(freshPreferences.Shortcuts["snippets"] == PreferenceSettings.DefaultShortcuts["snippets"], "New profiles receive the platform snippets shortcut");

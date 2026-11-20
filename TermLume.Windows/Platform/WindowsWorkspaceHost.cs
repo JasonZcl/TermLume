@@ -25,7 +25,8 @@ internal sealed class WindowsWorkspaceHost(Window owner, Action<object> send) : 
                 MessageBoxButton.YesNo, MessageBoxImage.Warning, MessageBoxResult.No) == MessageBoxResult.Yes,
             "securityNotice" => ShowSecurityNotice(request),
             "pickFolder" => PickFolder(request),
-            "exportLogs" => PickLogExport(request),
+            "exportLogs" or "exportWorkspace" => PickLogExport(request),
+            "importWorkspace" => PickWorkspaceImport(request),
             "openBrowser" => OpenBrowser(request),
             "copy" => Copy(request.GetProperty("text").GetString()!),
             "paste" => Clipboard.ContainsText() ? Clipboard.GetText() : "",
@@ -75,11 +76,17 @@ internal sealed class WindowsWorkspaceHost(Window owner, Action<object> send) : 
         return dialog.ShowDialog(owner) == true ? dialog.FolderName : null;
     }
 
+    private string? PickWorkspaceImport(JsonElement request)
+    {
+        var dialog = new OpenFileDialog { Title = request.GetProperty("title").GetString()!, Filter = "TermLume JSON|*.json", CheckFileExists = true, Multiselect = false };
+        return dialog.ShowDialog(owner) == true ? dialog.FileName : null;
+    }
+
     private string? PickLogExport(JsonElement request)
     {
         var dialog = new SaveFileDialog
         {
-            Title = request.GetProperty("title").GetString()!, Filter = Localization.Text("JSON 日志|*.json"),
+            Title = request.GetProperty("title").GetString()!, Filter = "JSON|*.json",
             DefaultExt = ".json", AddExtension = true, FileName = request.GetProperty("name").GetString()!, OverwritePrompt = true
         };
         return dialog.ShowDialog(owner) == true ? dialog.FileName : null;

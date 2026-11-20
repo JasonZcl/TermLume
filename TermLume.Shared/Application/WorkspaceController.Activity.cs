@@ -8,7 +8,7 @@ namespace TermLume.Shared.Application;
 
 public sealed partial class WorkspaceController
 {
-    private readonly ActivityLogStore activityLog;
+    private ActivityLogStore activityLog;
     private readonly Dictionary<string, SessionActivity> sessionActivity = [];
     private KnownHostRegistry KnownHosts => new(workspace, store);
 
@@ -44,7 +44,7 @@ public sealed partial class WorkspaceController
 
     private async Task<bool> ExportLogsAsync(JsonElement payload)
     {
-        var generation = authentication.Generation;
+        var generation = CurrentGeneration;
         var ids = payload.GetProperty("ids").Deserialize<List<string>>(WorkspaceStore.JsonOptions) ?? [];
         var entries = activityLog.Select(ids);
         if (entries.Count == 0) throw new InvalidDataException("没有可导出的日志，请刷新列表后重试。");
@@ -53,7 +53,7 @@ public sealed partial class WorkspaceController
         if (selected is null) return false;
         var target = Path.GetFullPath(selected);
         // 导出是独立副本，不能通过保存对话框覆盖应用正在使用的配置或日志。
-        if (new[] { "workspace.json", "activity-log.json" }.Any(name => string.Equals(target, Path.Combine(dataDirectory, name), StringComparison.OrdinalIgnoreCase)))
+        if (target.StartsWith(Path.TrimEndingDirectorySeparator(Path.GetFullPath(dataDirectory)) + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase))
             throw new InvalidDataException("请勿覆盖应用配置或活动日志文件，请选择其他导出位置。");
         File.WriteAllText(target, JsonSerializer.Serialize(new { application = "TermLume", exportedAt = DateTimeOffset.Now, entries }, WorkspaceStore.JsonOptions));
         return true;

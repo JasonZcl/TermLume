@@ -32,7 +32,7 @@ public sealed partial class WorkspaceController
 
     private async Task<object?> HandleSftpAsync(string operation, JsonElement payload)
     {
-        var generation = authentication.Generation;
+        var generation = CurrentGeneration;
         if (operation == "sftpConnect") return await ConnectSftpAsync(payload);
         if (operation == "sftpDefaultLocal")
         {
@@ -86,7 +86,7 @@ public sealed partial class WorkspaceController
 
     private async Task<object> ConnectSftpAsync(JsonElement payload)
     {
-        var generation = authentication.Generation;
+        var generation = CurrentGeneration;
         if (sftpSessions.Count >= 4) throw new InvalidOperationException("最多同时打开 4 个 SFTP 连接。");
         var host = GetHost(payload.GetProperty("hostId").GetString()!);
         var id = Guid.NewGuid().ToString("N");
@@ -156,7 +156,7 @@ public sealed partial class WorkspaceController
 
     private async Task<object> StartDroppedUploadsAsync(JsonElement payload, IReadOnlyList<string> nativePaths)
     {
-        var generation = authentication.Generation;
+        var generation = CurrentGeneration;
         var sessionId = payload.GetProperty("sessionId").GetString()!;
         if (!sftpSessions.TryGetValue(sessionId, out var session)) throw new InvalidOperationException("SFTP 会话已断开，请重新连接。");
         if (nativePaths.Count == 0 || nativePaths.Count > 100 - transferJobs.Count)

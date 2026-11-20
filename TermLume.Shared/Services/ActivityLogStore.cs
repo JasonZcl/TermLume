@@ -34,6 +34,8 @@ public sealed class ActivityLogStore
         }
     }
 
+    public List<ActivityLogEntry> Entries() { lock (gate) return entries.ToList(); }
+
     public object Snapshot()
     {
         lock (gate) return new { entries = entries.ToArray(), error, limit = Limit };

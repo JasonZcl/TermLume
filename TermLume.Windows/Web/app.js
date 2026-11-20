@@ -16,6 +16,8 @@ let listView = false;
 let toastTimer;
 let editorSubmit = null;
 let editorGeneration = 0;
+let editorWorkspaceRevision = 0;
+let editorWorkspaceId = null;
 let ready = false;
 let selectedHostId = null;
 let sortRecent = false;
@@ -166,7 +168,9 @@ $('#editor-form').addEventListener('submit', async event => {
   button.disabled = true;
   const generation = editorGeneration;
   $('#form-error').textContent = '';
-  try { await editorSubmit(event.target); if (generation === editorGeneration) $('#editor-dialog').close(); }
+  try {
+    if (editorWorkspaceId !== (workspaceSyncState.context?.id || null) || workspaceSyncState.revision !== editorWorkspaceRevision) throw new Error(t('工作区已更新，请先复制草稿内容，再关闭编辑窗口并重新打开。'));
+    await editorSubmit(event.target); if (generation === editorGeneration) $('#editor-dialog').close(); }
   catch (error) { if (generation === editorGeneration) $('#form-error').textContent = t(error.message); else toast(error.message, true); }
   finally { button.disabled = false; }
 });
@@ -192,8 +196,8 @@ function request(op, payload = {}, additionalObjects = null) {
   const id = crypto.randomUUID();
   return new Promise((resolve, reject) => {
     // 超时只结束页面等待，不代表原生连接或传输已取消；取消须发送相应操作。
-    const timeout = setTimeout(() => { pending.delete(id); reject(new Error(t('操作等待超时，请检查连接状态。'))); }, ['connect', 'exportLogs', 'authLogin'].includes(op) || op.startsWith('sftp') ? 600000 : 30000);
-    pending.set(id, { resolve, reject, timeout });
+    const timeout = setTimeout(() => { pending.delete(id); reject(new Error(t('操作等待超时，请检查连接状态。'))); }, ['connect', 'exportLogs', 'exportWorkspace', 'importWorkspace', 'adoptTrustReference', 'authLogin'].includes(op) || op.startsWith('sftp') ? 600000 : 30000);
+    pending.set(id, { resolve, reject, timeout, generation: authenticationGeneration, op });
     try {
       if (additionalObjects) {
         if (!bridge.postMessageWithAdditionalObjects) throw new Error(t('当前 WebView2 版本不支持外部拖入，请更新 WebView2 或在左侧选择文件上传。'));
@@ -207,6 +211,23 @@ bridge?.addEventListener('message', event => {
   const message = event.data;
   if (message.type === 'authenticationChanged') {
     receiveAuthentication(message.authentication);
+  } else if (message.type === 'workspaceAccessLost') {
+    lockWorkspace(); resetCollaboration();
+    const generation = authenticationGeneration;
+    unlockWorkspace().then(() => {
+      if (generation === authenticationGeneration && ready) toast(t('你已失去原工作区权限，已返回个人工作区。'), true);
+    }).catch(error => {
+      if (generation !== authenticationGeneration) return;
+      authenticationError = error.message; renderAuthentication();
+    });
+  } else if (message.type === 'workspaceChanged') {
+    if (ready) refreshWorkspace(message.workspace);
+  } else if (message.type === 'workspaceSyncChanged') {
+    if (ready) {
+      workspaceSyncState = message.state;
+      updateSynchronizationNotice();
+      if (!activeSession && currentView === 'settings' && settingsSection === 'account') renderSettings();
+    }
   } else if (message.type === 'sftpEnded') {
     onSftpEnded(message);
   } else if (message.type === 'sftpProgress') {
@@ -223,9 +244,10 @@ bridge?.addEventListener('message', event => {
     if (!callback) return;
     clearTimeout(callback.timeout);
     pending.delete(message.id);
+    if (callback.generation !== authenticationGeneration && !['authStatus', 'authLogin', 'authCancel', 'authLogout', 'status', 'window', 'shutdown'].includes(callback.op)) { callback.reject(new Error(t('工作区已切换，请重试。'))); return; }
     if (message.ok) callback.resolve(message.result);
     else {
-      if (message.errorCode === 'authentication_required') {
+      if (message.errorCode === 'authentication_required' && callback.generation === authenticationGeneration) {
         receiveAuthentication({ ...authenticationState, isAuthenticated: false, user: null, expiresAt: null });
       }
       callback.reject(new Error(message.error));
@@ -259,7 +281,7 @@ function toast(message, error = false) {
 }
 
 function viewLabel() {
-  return groupLabel(currentGroup) || ({ hosts: t('所有主机'), favorites: t('收藏夹'), recent: t('最近连接'), snippets: t('命令片段'), settings: t('设置'), knownHosts: t('已知主机'), logs: t('日志'), sftp: t('SFTP 文件传输') })[currentView];
+  return groupLabel(currentGroup) || ({ hosts: t('所有主机'), favorites: t('收藏夹'), recent: t('最近连接'), snippets: t('命令片段'), settings: t('设置'), knownHosts: t('已知主机'), logs: t('日志'), collaboration: t('工作区'), sftp: t('SFTP 文件传输') })[currentView];
 }
 
 function refreshWorkspace(value) {
@@ -267,6 +289,7 @@ function refreshWorkspace(value) {
   applyPreferences();
   renderSidebar();
   renderSnippetPanel();
+  updateSynchronizationNotice();
   if (!activeSession) renderPage();
 }
 
@@ -313,7 +336,8 @@ function renderPage() {
   $('#breadcrumb-label').textContent = viewLabel();
   $('#page').classList.toggle('settings-page', currentView === 'settings');
   $('#page').classList.toggle('sftp-page', currentView === 'sftp');
-  $('#page').classList.toggle('host-page', !['snippets', 'settings', 'knownHosts', 'logs', 'sftp'].includes(currentView));
+  $('#page').classList.toggle('host-page', !['snippets', 'settings', 'knownHosts', 'logs', 'sftp', 'collaboration'].includes(currentView));
+  if (currentView === 'collaboration') return renderCollaboration();
   if (currentView === 'sftp') return renderSftp();
   if (currentView === 'knownHosts') return renderKnownHosts();
   if (currentView === 'logs') return renderActivityLogs();
@@ -503,6 +527,8 @@ function parseQuickAddress(value) {
 
 function openEditor(html, submit) {
   editorGeneration++;
+  editorWorkspaceRevision = workspaceSyncState.revision;
+  editorWorkspaceId = workspaceSyncState.context?.id || null;
   $('#editor-form').innerHTML = html;
   editorSubmit = submit;
   $('#editor-dialog').showModal();
@@ -564,6 +590,7 @@ function openSnippetEditor(snippet = {}) {
 new ResizeObserver(() => fitActiveTerminal()).observe($('#terminals'));
 renderTabs();
 renderSidebar();
+new MutationObserver(updateSynchronizationNotice).observe($('#page'), { childList: true, subtree: true });
 initializeAuthentication();
 request('window', { action: 'state' }).then(result => updateWindowState(result.maximized)).catch(() => {});
 document.querySelectorAll('.nav-item').forEach(button => {

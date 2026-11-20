@@ -19,7 +19,7 @@ internal static class WorkspaceControllerTests
         var store = new WorkspaceStore(dataDirectory);
         store.Save(original);
         var host = new RecordingHost();
-        var controller = new WorkspaceController(dataDirectory, host, new ImmediateDispatcher(), new TestAccount());
+        var controller = new WorkspaceController(dataDirectory, host, new ImmediateDispatcher(), new TestAccount(), new LocalTestWorkspaceSynchronization());
         async Task<JsonElement> Call(string operation, object? payload = null, string? requestId = null)
         {
             var id = requestId ?? Guid.NewGuid().ToString("N");
@@ -95,7 +95,7 @@ internal static class WorkspaceControllerTests
         check(await controller.ShutdownAsync() && await controller.ShutdownAsync(), "Shared shutdown is safe to request more than once");
         check(!Ok(await Call("saveGroup", new { name = "After shutdown" })), "Shared shutdown prevents later workspace mutations");
         var restoredHost = new RecordingHost();
-        var restored = new WorkspaceController(dataDirectory, restoredHost, new ImmediateDispatcher(), new TestAccount());
+        var restored = new WorkspaceController(dataDirectory, restoredHost, new ImmediateDispatcher(), new TestAccount(), new LocalTestWorkspaceSynchronization());
         check(store.Load().Hosts.Single().Id == original.Hosts[0].Id && store.Load().Preferences.Language == "en", "Shared shutdown preserves existing on-disk data");
         await restored.ShutdownAsync();
         Localization.Language = "zh-CN";

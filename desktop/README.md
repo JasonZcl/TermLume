@@ -1,6 +1,6 @@
 # TermLume macOS 桌面入口
 
-Windows 正式入口仍为 `TermLume.Windows/TermLume.Windows.csproj`，原有安装器和用户目录不变。此目录提供 macOS 桌面壳，复用 `../TermLume.Windows/Web`，通过标准输入 / 输出 JSON Lines 与 `TermLume.DesktopBackend` 通信；仅在账号登录期间开启 IPv4 回环回调，不从渲染页直接访问 Node.js 或 SSH 库。使用前必须配置 Aegis-IAM 公共客户端，详见 [登录对接](../docs/aegis-iam.md)。
+Windows 正式入口仍为 `TermLume.Windows/TermLume.Windows.csproj`，原有安装器和用户目录不变。此目录提供 macOS 桌面壳，复用 `../TermLume.Windows/Web`，通过标准输入 / 输出 JSON Lines 与 `TermLume.DesktopBackend` 通信；仅在账号登录期间开启 IPv4 回环回调，不从渲染页直接访问 Node.js 或 SSH 库。使用前必须配置 Aegis-IAM 公共客户端，详见 [登录对接](../docs/aegis-iam.md)。业务数据通过独立 `TermLume.Api` 保存到 PostgreSQL，启动桌面前需先启动本地业务服务，详见 [PostgreSQL 工作区](../docs/postgresql.md)。
 
 ## 开发与构建
 
@@ -57,4 +57,6 @@ Windows 上可执行上述隔离测试，并交叉发布 `osx-arm64` / `osx-x64`
 3. 在每种架构上验证 `codesign --verify --deep --strict TermLume.app`、`spctl --assess --type execute --verbose TermLume.app` 和公证票据，随后使用带下载隔离标记的 DMG 在干净 Mac 安装验收。
 4. 退出旧版本、升级并核对主机 / 分组 / 指纹 / 快捷键 / 日志保留；测试中文与英文、密码与加密私钥、指纹变化拦截、磁盘 / 外接卷浏览、Finder 上传、双栏下载 / 取消、缩放和退出确认。
 
-目前不包含自动更新、系统钥匙串密码保存或自动发布 Release；Windows 安装器仍负责 Windows 的卸载数据保留选项。
+构建依赖通过 `package.json` 的 override 将受 GHSA-g3hv-75wg-m249 影响的 minimatch 7–10 升级到 11.0.1；较早的不受影响版本保持兼容。更新依赖时请同时执行完整 `npm audit` 和打包筛选验证，详见 [安全检查](../docs/security-review-2026-11-19.md)。
+
+目前不包含自动更新、SSH 密码的系统钥匙串保存或自动发布 Release；Windows 安装器仍负责 Windows 的卸载数据保留选项。Aegis-IAM 刷新凭据使用系统凭据存储。

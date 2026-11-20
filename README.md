@@ -1,12 +1,36 @@
 # TermLume
 
-TermLume 是一款支持 Windows 与 macOS 的 SSH / SFTP 桌面客户端，提供主机管理、多标签终端、双栏文件传输及本地工作空间。Windows 使用 WPF / WebView2；macOS 使用 Electron 桌面入口，两者复用 .NET 10、SSH.NET、xterm.js 和同一套工作台界面。macOS 构建与验收说明见下方「macOS 版本」。
+TermLume 是一款支持 Windows 与 macOS 的 SSH / SFTP 桌面客户端，提供主机管理、多标签终端、双栏文件传输及按账号同步的工作空间。Windows 使用 WPF / WebView2；macOS 使用 Electron 桌面入口，两者复用 .NET 10、SSH.NET、xterm.js 和同一套工作台界面。macOS 构建与验收说明见下方「macOS 版本」。
+
+| 组件 | 版本 / 技术 | 职责 |
+| --- | --- | --- |
+| 桌面客户端 | 0.8.1；Windows WPF / macOS Electron | SSH / SFTP、本机凭据与信任、工作区界面和离线草稿 |
+| 工作区 API | 0.9.0；ABP Framework 10.7.1 / .NET 10 | 业务权限、配置同步、团队协作和服务端审计 |
+| PostgreSQL | 独立 `termlume` 业务库 | 保存所有账号和工作区的业务数据，通过 RLS 隔离 |
+| Aegis-IAM | 同级目录中的独立项目 | 登录、会话、令牌签发与撤销 |
+
+SSH / SFTP 由桌面端直接连接目标服务器；工作区 API 负责业务数据同步。使用软件需要可达的 IAM 和工作区 API，本机回环地址用于当前电脑联调。变更记录见 [CHANGELOG](CHANGELOG.md)，安全边界见 [SECURITY](SECURITY.md)，开发与提交约定见 [CONTRIBUTING](CONTRIBUTING.md)。
+
+本次提交的检查范围、已修复问题及验证结果见 [2026-11-20 安全检查](docs/security-review-2026-11-20.md)，建议提交描述见 [提交说明](docs/commit-message.md)。
 
 ## Aegis-IAM 登录
 
 启动后必须先通过 Aegis-IAM 登录，才能使用工作空间。当前测试配置使用本地 Docker 环境 `http://localhost:18080` 和公共客户端 `termlume-desktop`，回调地址为 `http://127.0.0.1:47831/callback/`，允许 `openid profile email offline_access`。其他环境可在根目录 `aegis-iam.json` 中修改；正式分发前需配置实际 HTTPS 服务地址。配置、应用登记、会话与测试说明见 [Aegis-IAM 对接](docs/aegis-iam.md)。
 
-本地构建沿用 `TermLume-0.7.4-win-x64-Setup.exe` 文件名，包含本次源码中的账号登录功能，校验值见安装包同目录的 `.sha256` 文件。此前在 GitHub Releases 发布的 v0.7.4 安装包不包含该功能。
+桌面端当前版本为 **0.8.1**，本地安装包为 `artifacts/TermLume-0.8.1-win-x64-Setup.exe`，校验值见同目录 `.sha256` 文件。完整变更与验证记录见 [0.8.1 更新说明](docs/releases/0.8.1.md)。工作区服务端已迁移至 **ABP Framework，版本 0.9.0**，兼容此桌面端，见 [服务端更新说明](docs/releases/0.9.0.md)。本地构建尚未上传 GitHub Releases。
+
+## PostgreSQL 工作区
+
+工作区 API 使用 ABP Framework 10.7.1，通过 Aegis-IAM 认证，连接其 Docker 环境中独立的 `termlume` 业务库，地址为 `http://127.0.0.1:18741`。在 Docker / IAM 就绪后，一键构建、备份并部署常驻 API：
+
+以下脚本面向 Windows 本地测试，需要 Docker Desktop、.NET 10 SDK，以及位于 `../Aegis-IAM`、已启动 Docker 测试容器的 IAM 项目。桌面安装包本身已内置 .NET 运行时；SDK 用于从源码构建服务。
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File ./tools/Publish-WorkspaceDocker.ps1
+Invoke-RestMethod http://127.0.0.1:18741/healthz
+```
+
+容器使用 `termlume-workspace-api:0.9.0`，配置重启策略和健康检查；同一服务及数据库承载所有工作区。数据库密码保存在被 Git 忽略的服务器本地配置中，不进入镜像或安装包。主机、分组、片段、收藏与偏好按账号或工作区同步；支持团队角色、设备撤销、活动日志同步、服务端审计、指纹参考、历史恢复和离线队列。SSH 凭据与私钥留在本机，指纹采用仍须逐设备核验。旧版配置在登录后确认导入并保留备份。本机开发也可使用 `tools/Start-WorkspaceApi.ps1`，配置和部署说明见 [PostgreSQL 工作区](docs/postgresql.md)。
 
 ## 下载与安装（无需编译）
 
@@ -14,19 +38,19 @@ TermLume 是一款支持 Windows 与 macOS 的 SSH / SFTP 桌面客户端，提�
 
 ### 下载安装包（Windows）
 
-当前 v0.7.4 安装包支持升级时自动卸载旧版程序，始终保留个人数据，并包含新的退出确认窗口、终端命令片段侧栏和可自定义的片段快捷键。
+v0.8.1 包含账号切换与页面回调的安全修复，保留 0.8.0 的 PostgreSQL 工作区与协作功能，支持从旧版升级并保留个人数据。测试包使用本机 Docker IAM 和 PostgreSQL，启动前先运行工作区 API。
 
 | 项目 | 说明 |
 | --- | --- |
-| 当前版本 | v0.7.4 |
+| 当前版本 | v0.8.1 |
 | 下载位置 | [GitHub Releases → Assets](https://github.com/JasonZcl/TermLume/releases) |
-| 安装包文件名 | `TermLume-0.7.4-win-x64-Setup.exe` |
-| 安装包大小 | 约 48.7 MiB（51,113,574 字节） |
+| 安装包文件名 | `TermLume-0.8.1-win-x64-Setup.exe` |
+| 安装包大小 | 以安装包文件属性为准 |
 | 目标平台 | Windows 10 / 11，win-x64 安装包 |
 | .NET 环境 | 已内置，不需要另外安装 .NET Runtime 或 SDK |
 | WebView2 环境 | 已安装则复用；缺少时需要联网安装 Microsoft 官方运行时 |
 
-1. 打开 [GitHub Releases](https://github.com/JasonZcl/TermLume/releases)，进入对应版本的 **Assets**，下载 `TermLume-0.7.4-win-x64-Setup.exe`。`Source code (zip)` / `Source code (tar.gz)` 是源码，不是安装包。
+1. 本地测试使用 `artifacts/TermLume-0.8.1-win-x64-Setup.exe`；正式发布后可从 [GitHub Releases](https://github.com/JasonZcl/TermLume/releases) 对应版本 **Assets** 下载。`Source code (zip)` / `Source code (tar.gz)` 是源码，不是安装包。
 2. 保存远端工作并正常退出旧版 TermLume，然后双击安装包，选择简体中文或 English，按提示安装。
 3. 安装完成后，从开始菜单打开 TermLume；安装器默认不自动启动应用。初始程序目录为 `%LOCALAPPDATA%\Programs\TermLume`，也可以在安装时修改。
 4. 升级时直接运行新安装包，无需手动卸载；安装器会先静默卸载已登记的旧版程序，再安装新版本。主机、分组、语言、快捷键、已知主机、日志和缓存保存在独立的 `%LOCALAPPDATA%\TermLume`，自动卸载始终保留这些数据。
@@ -35,22 +59,20 @@ TermLume 是一款支持 Windows 与 macOS 的 SSH / SFTP 桌面客户端，提�
 
 ### 校验安装包
 
-GitHub Releases 已发布的 v0.7.4 安装包 SHA-256 如下；本地重新打包的同名文件请使用构建输出或安装包同目录的 `.sha256` 文件核对：
-
-```text
-42f15078ec808b802ccb1a0656a94ec177089e04bb80e651ff1aebde43a0384a
-```
+v0.8.1 的 SHA-256 随安装包输出在 `.exe.sha256` 文件中，每次重新构建后均重新生成。
 
 在下载的安装包所在目录打开 PowerShell，运行以下命令，将输出的 `Hash` 与对应版本的校验值比较（大小写不影响比较）：
 
 ```powershell
-Get-FileHash -LiteralPath ./TermLume-0.7.4-win-x64-Setup.exe -Algorithm SHA256
+Get-FileHash -LiteralPath ./TermLume-0.8.1-win-x64-Setup.exe -Algorithm SHA256
 ```
 
 应用和安装包目前未使用代码签名证书，Windows 可能提示发布者未知。校验值用于核对文件完整性，不能代替发布者数字签名。
 
 ## 当前功能
 
+- PostgreSQL 个人 / 团队工作区、成员权限与邀请、历史恢复、设备管理、审计、跨设备活动日志与指纹参考。
+- 持久离线队列、冲突处理、配置导入导出；数据库备份恢复脚本与独立 API Docker 部署。
 - 深色工作台，支持简体中文 / English，提供主机卡片 / 列表、分组、收藏、搜索与最近连接。
 - 主机新增、编辑、删除；支持 IPv4、域名、IPv6 和自定义端口。
 - 独立新建分组，支持空分组并自动保存；在分组内添加主机自动归组，旧版主机分组自动保留。
@@ -63,7 +85,7 @@ Get-FileHash -LiteralPath ./TermLume-0.7.4-win-x64-Setup.exe -Algorithm SHA256
 - 独立「已知主机」页面：按地址、主机名称、算法或指纹搜索，筛选指纹变化记录，复制指纹并经确认移除信任；显示首次信任、最近核验时间及最近收到的异常指纹。
 - 独立「日志」页面：连接开始 / 成功 / 失败 / 取消 / 断开、应用启停及指纹信任 / 核验 / 变化 / 移除事件；支持关键词、级别、类型、时间筛选、分页、详情复制、JSON 导出与确认清空。
 - 命令片段新增 / 编辑 / 删除 / 复制，支持终端侧栏搜索与目标会话选择；单行命令可无回车填入，多行命令可在再次确认后发送执行，含控制字符的片段拒绝发送。
-- 字号与 Midnight / Nord 配色，主机配置自动保存到本机。
+- 字号与 Midnight / Nord 配色，主机、分组、收藏、最近连接、命令片段与偏好设置按账号保存到 PostgreSQL；快捷键按平台分别同步。
 - 紫灰色紧凑工作台、可折叠侧栏、顶部终端标签与自定义窗口控制；主机支持单击选择、双击或 Enter 连接。
 - 鼠标拖动窗口四边 / 四角缩放，保留原生缩放命中区；SFTP 中间分隔条可拖动调整双栏宽度，双击恢复均分。
 - 统一的原生密码 / 私钥口令弹窗：紫灰卡片、圆角输入框、焦点高亮、Caps Lock 提醒，支持 Enter 连接和 Esc 取消。
@@ -79,8 +101,8 @@ Get-FileHash -LiteralPath ./TermLume-0.7.4-win-x64-Setup.exe -Algorithm SHA256
 
 | 设备 | 构建命令（在 `desktop` 目录中） | 生成文件 |
 | --- | --- | --- |
-| Apple Silicon | `npm run dist:mac:arm64` | `TermLume-0.7.4-macOS-arm64.dmg` / `.zip` |
-| Intel | `npm run dist:mac:x64` | `TermLume-0.7.4-macOS-x64.dmg` / `.zip` |
+| Apple Silicon | `npm run dist:mac:arm64` | `TermLume-0.8.1-macOS-arm64.dmg` / `.zip` |
+| Intel | `npm run dist:mac:x64` | `TermLume-0.8.1-macOS-x64.dmg` / `.zip` |
 
 - **安装与升级**：打开 DMG，将 `TermLume.app` 拖入「应用程序」。更新前正常退出旧版本，再替换应用；个人配置放在独立目录，不随 `.app` 覆盖。内置 .NET 后端，使用者无需另外安装 .NET 或 WebView2。
 - **界面与操作**：保留主机、分组、命令片段、已知主机、日志、中英文切换与 SSH / SFTP 功能；使用 macOS 红黄绿窗口按钮、可缩放窗口、原生文件选择框及独立密码弹窗。可从 Finder 拖入普通文件上传，双栏间拖放上传 / 下载；不支持从远端面板直接拖出到 Finder。
@@ -107,7 +129,7 @@ npm run dist:mac:arm64
 
 ## Windows 开发运行
 
-需要 Windows 10/11、.NET 10 SDK 及 Microsoft Edge WebView2 Evergreen Runtime；开发运行所需的 .NET Desktop Runtime 至少为 10.0.14，建议使用含该安全补丁或更新补丁的 SDK。首次还原 NuGet 包需要网络；终端前端依赖已打包在仓库，无需 Node.js、npm 或 CDN。SSH.NET 使用仓库 `vendor/packages` 中的本地安全修订包，来源及重建方法见该目录 README，不要替换成未设接收限额的上游版本。
+需要 Windows 10/11、.NET 10 SDK 及 Microsoft Edge WebView2 Evergreen Runtime；开发运行所需的 .NET Desktop Runtime 至少为 10.0.15，建议使用含该安全补丁或更新补丁的 SDK。首次还原 NuGet 包需要网络；终端前端依赖已打包在仓库，无需 Node.js、npm 或 CDN。SSH.NET 使用仓库 `vendor/packages` 中的本地安全修订包，来源及重建方法见该目录 README，不要替换成未设接收限额的上游版本。
 
 ```powershell
 dotnet restore TermLume.sln
@@ -115,7 +137,7 @@ dotnet build TermLume.sln
 dotnet run --project TermLume.Windows
 ```
 
-发布框架依赖版（目标设备需要 .NET 10.0.14 或更新安全补丁的 Desktop Runtime，以及 WebView2 Runtime）：
+发布框架依赖版（目标设备需要 .NET 10.0.15 或更新安全补丁的 Desktop Runtime，以及 WebView2 Runtime）：
 
 ```powershell
 dotnet publish TermLume.Windows/TermLume.Windows.csproj -c Release -r win-x64 --self-contained false -o "$env:TEMP/TermLume-framework-dependent-v0.7.1"
@@ -123,7 +145,7 @@ dotnet publish TermLume.Windows/TermLume.Windows.csproj -c Release -r win-x64 --
 
 ## Windows 安装包
 
-从 [GitHub Releases](https://github.com/JasonZcl/TermLume/releases) 下载 `TermLume-0.7.4-win-x64-Setup.exe` 后，双击安装。支持简体中文 / English 安装及卸载界面，默认仅为当前 Windows 用户安装，无需管理员权限；可选桌面快捷方式，也可从开始菜单打开。安装包内置 .NET，目标电脑无需另外安装 .NET Desktop Runtime。缺少 WebView2 Runtime 时，安装器使用带 Microsoft 数字签名的官方引导程序联网安装；离线电脑请提前安装 WebView2 Evergreen Runtime。运行时安装失败会中止应用安装，不继续更新程序文件。不自动启动应用，避免意外创建连接。
+运行本地 `artifacts/TermLume-0.8.1-win-x64-Setup.exe`，或在正式发布后从 [GitHub Releases](https://github.com/JasonZcl/TermLume/releases) 下载对应安装包，再双击安装。支持简体中文 / English 安装及卸载界面，默认仅为当前 Windows 用户安装，无需管理员权限；可选桌面快捷方式，也可从开始菜单打开。安装包内置 .NET，目标电脑无需另外安装 .NET Desktop Runtime。缺少 WebView2 Runtime 时，安装器使用带 Microsoft 数字签名的官方引导程序联网安装；离线电脑请提前安装 WebView2 Evergreen Runtime。运行时安装失败会中止应用安装，不继续更新程序文件。不自动启动应用，避免意外创建连接。
 
 - **升级 / 重装**：直接运行新安装包，无需手动卸载。安装器按固定产品标识识别当前用户已登记的旧版，先检查运行状态、路径、版本和 WebView2 前置条件，再使用旧版自己的卸载器静默移除程序文件，最后安装新版本。自动卸载始终保留个人数据，旧版卸载失败或卸载器缺失时停止安装；也支持选择新程序目录，旧目录内非安装器创建的文件会保留。主机、分组、设置、信任记录、日志和缓存仍保存在 `%LOCALAPPDATA%\TermLume`，不会覆盖或初始化。阻止降级，包括通过更改安装目录绕过版本检查。只处理当前用户已登记的同一产品，不搜索或删除其他账号、便携副本及下载的旧安装包。新文件安装阶段失败不会自动恢复已卸载的旧版程序，可修复问题后重新运行同版或更新安装包；个人数据继续保留。
 - **先关闭应用**：安装 / 卸载前请保存远端工作并正常退出 TermLume。检测到运行中的实例会要求先关闭，不强制结束 SSH 会话、不自动重启应用。
@@ -141,7 +163,7 @@ dotnet publish TermLume.Windows/TermLume.Windows.csproj -c Release -r win-x64 --
 
 安装包统一按 `TermLume-<版本>-win-x64-Setup.exe` 命名，并在同目录生成 `.sha256` 校验文件。发布目录中的 `aegis-iam.json` 会与仓库配置逐字节核对。
 
-脚本在系统临时目录生成自包含 win-x64 发布文件，校验 WebView2 引导程序的 Microsoft 签名，并校验内置 .NET / WPF 运行时与项目固定的 10.0.14 安全基线一致；`artifacts` 只输出 EXE 安装包，SHA-256 输出到控制台。应用与安装包当前未使用商业代码签名证书，Windows SmartScreen 可能提示发布者未知；分发时请同时提供 SHA-256 校验值。构建工具只需要 Inno Setup 编译器，不会自动安装到开发者的个人软件目录。自包含运行时不会随系统 .NET 自动升级，需要定期更新项目安全基线并重新打包。
+脚本在系统临时目录生成自包含 win-x64 发布文件，校验 WebView2 引导程序的 Microsoft 签名，并校验内置 .NET / WPF 运行时与项目固定的 10.0.15 安全基线一致；`artifacts` 只输出 EXE 安装包，SHA-256 输出到控制台。应用与安装包当前未使用商业代码签名证书，Windows SmartScreen 可能提示发布者未知；分发时请同时提供 SHA-256 校验值。构建工具只需要 Inno Setup 编译器，不会自动安装到开发者的个人软件目录。自包含运行时不会随系统 .NET 自动升级，需要定期更新项目安全基线并重新打包。
 
 安装器源码为 `tools/installer/TermLume.iss`；简体中文语言文件来自 Inno Setup 官方源码仓库的 `Files/Languages/ChineseSimplified.isl`，保留原维护者信息。安装及 WebView2 分发逻辑参考 Inno Setup 官方帮助与 Microsoft WebView2 Distribution 文档。隔离验证脚本为 `tools/Test-Installer.ps1`，只在构建临时目录下使用独立的安装标识、安装目录和模拟数据，不安装或卸载真实用户版本：
 
@@ -165,7 +187,7 @@ $env:TERMLUME_TEST_PYTHON = "$venv/Scripts/python.exe"
 dotnet run --project tests/TermLume.SecurityTests -c Release -p:SelfContained=true
 ```
 
-覆盖密钥与算法变更、旧信任记录兼容、写盘失败回滚、无前端 ACK 的输出洪泛与确认超时、PTY 建立阶段洪泛、正常 UTF-8 输出与窗口调整、密码和加密 / 未加密 RSA 私钥认证、会话隔离，以及 SFTP 上传下载与拒绝覆盖。同时覆盖共享控制器的旧工作区兼容、主机 / 分组 / 片段操作、凭据取消、偏好写盘失败回滚、本地文件范围、日志导出保护及退出状态。测试使用自包含的 .NET 10.0.14 运行时。
+覆盖密钥与算法变更、旧信任记录兼容、写盘失败回滚、无前端 ACK 的输出洪泛与确认超时、PTY 建立阶段洪泛、正常 UTF-8 输出与窗口调整、密码和加密 / 未加密 RSA 私钥认证、会话隔离，以及 SFTP 上传下载与拒绝覆盖。同时覆盖共享控制器的旧工作区兼容、主机 / 分组 / 片段操作、凭据取消、偏好写盘失败回滚、本地文件范围、日志导出保护及退出状态。测试使用自包含的 .NET 10.0.15 运行时。
 
 片段前端回归测试只依赖 Node.js，使用模拟终端与桥接，不连接真实主机：
 
@@ -207,7 +229,7 @@ node --test tests/snippets.test.cjs
 
 退出时使用与工作台一致的深色确认窗口，展示 SSH、SFTP 和传输任务数量；默认焦点为「继续使用」，按 Esc 或关闭弹窗均不退出。只有明确点击「断开并退出」才取消传输并释放连接；无活动连接时直接退出。
 
-设置中心按外观、终端、快捷键、数据与安全、关于分类组织。外观支持 Midnight / Nord 终端配色、鸢尾紫 / 薄荷绿 / 海洋蓝强调色、紧凑 / 舒适卡片密度及侧栏折叠状态。终端配置自动保存，实时应用，不需要断开连接。JetBrains Mono 选项使用本机字体，未安装时自动使用备用字体，不会下载字体。
+设置中心按账号、外观、终端、快捷键、数据与安全、关于分类组织。外观支持 Midnight / Nord 终端配色、鸢尾紫 / 薄荷绿 / 海洋蓝强调色、紧凑 / 舒适卡片密度及侧栏折叠状态。终端配置自动保存，实时应用，不需要断开连接。JetBrains Mono 选项使用本机字体，未安装时自动使用备用字体，不会下载字体。
 
 在「设置 → 快捷键」点击某项的按键区域，按下新组合后点击「保存快捷键」。可清除以停用单项，也可恢复默认。重复组合会提示冲突；应用只处理自身窗口内的快捷键，不注册全局热键，不改动 Windows 系统快捷键。
 
@@ -250,22 +272,23 @@ SFTP 活动会记录连接结果、文件操作类型、传输方向和完成字
 
 ## 图标源文件
 
-矢量源文件位于 `TermLume.Windows/Assets/TermLume.svg`，多尺寸 Windows 图标为 `TermLume.Windows/Assets/TermLume.ico`。修改图形时同步调整生成脚本的形状定义，在 Windows 上执行 `./tools/Generate-Icon.ps1` 可重新生成 ICO、PNG 和页面 SVG 标识。新版兼容旧配置，退出旧版后打开新版即可继续使用已有主机和信任指纹；旧记录没有核验时间时显示为未知，不虚构历史日期。使用新版后请勿交替运行旧版，旧版保存时不识别新增的分组和核验元数据。
+矢量源文件位于 `TermLume.Windows/Assets/TermLume.svg`，多尺寸 Windows 图标为 `TermLume.Windows/Assets/TermLume.ico`。修改图形时同步调整生成脚本的形状定义，在 Windows 上执行 `./tools/Generate-Icon.ps1` 可重新生成 ICO、PNG 和页面 SVG 标识。新版保留旧配置，退出旧版后登录并确认导入，即可在当前账号继续使用已有主机和本机信任指纹；旧记录没有核验时间时显示为未知，不虚构历史日期。使用新版后请勿交替运行旧版，旧版保存时不识别新增的分组和核验元数据。
 
 ## 已知主机与日志
 
 - 「已知主机」按地址、端口及协商的主机密钥算法分别保存信任记录。原有指纹变化时不会自动替换，连接会被阻止；核实服务器确实换钥后，再移除对应旧记录并重新连接确认。移除信任不会中断现有会话。
 - 核验时间记录的是 SSH 握手中的服务器身份核验，不代表用户认证成功。「日志」中的连接成功事件表示交互式终端已就绪。
-- 日志位于 `%LOCALAPPDATA%\TermLume\activity-log.json`，为本地明文，最多保留最近 2,000 条事件，达到上限自动淘汰旧事件；不是终端录屏、命令历史或防篡改审计系统。异常退出可能没有正常退出 / 断开事件。
+- 当前账号日志位于 `%LOCALAPPDATA%\TermLume\accounts\<账号与服务标识>\activity-log.json`，为本地明文，最多保留最近 2,000 条事件，达到上限自动淘汰旧事件；不是终端录屏、命令历史或防篡改审计系统。异常退出可能没有正常退出 / 断开事件。
 - 日志不收集密码、私钥内容或口令、终端输入 / 输出，也不直接持久化异常原文。记录可能包含主机名称、地址、用户名、指纹、会话 ID 和连接时长；导出及分享前请检查。
-- 导出包含当前筛选条件下的全部匹配事件，不限于当前页，通过系统保存对话框选择 JSON 文件。清空会删除全部日志，不仅是当前筛选结果；不会删除主机配置或信任记录。
+- 导出包含当前筛选条件下的全部匹配事件，不限于当前页，通过系统保存对话框选择 JSON 文件。清空本机日志会删除本机全部记录，不仅是当前筛选结果；云端个人日志可单独清空，服务端审计由后台按 7 天保留期清理。不会删除主机配置或本机信任。
 - 日志文件损坏时显示警告，不静默覆盖原文件；新事件暂存内存。先备份损坏文件，再确认清空以重建。磁盘写入失败也会在日志页提示，不因此阻断 SSH。
 
 ## 数据与安全边界
 
-- 配置：Windows 为 `%LOCALAPPDATA%\TermLume\workspace.json`，macOS 为 `~/Library/Application Support/TermLume/workspace.json`；主机地址、用户名、备注、命令片段、私钥路径和信任指纹均为本地明文。请勿在备注或片段中保存秘密。
-- 活动日志同样是本地明文；备份时按需同时保存 `activity-log.json`，不会上传到云端。
-- 不持久化密码或私钥口令，不复制私钥、不云同步。认证库使用托管字符串，不能承诺密码在内存中被即时清零。
+- 主机、分组、收藏、最近连接、命令片段与偏好设置通过 `TermLume.Api` 保存到独立 PostgreSQL 业务库。身份由 IAM 令牌验证后的 issuer + subject 决定，每个账号拥有独立工作区。请勿在备注或片段中保存秘密。
+- 当前账号的本机缓存、私钥路径与信任记录保存在 Windows 的 `%LOCALAPPDATA%/TermLume/accounts/<账号与服务标识>/` 或 macOS 的 `~/Library/Application Support/TermLume/accounts/<账号与服务标识>/`，为本机明文。原根目录旧数据保留，登录后可确认导入并自动备份。
+- 活动日志在本机为明文，可将脱敏元数据同步到工作区 API；服务端活动日志及操作审计统一保留 7 天。API 启动时及每小时清理过期记录，查询仅返回保留期内的数据；可暂停同步或清空云端个人日志。消息原文、异常详情、完整路径与终端内容不会上传。
+- 不持久化 SSH 密码或私钥口令，不复制或上传私钥文件、私钥路径。认证库使用托管字符串，不能承诺密码在内存中被即时清零。
 - RSA 私钥使用 SHA-2 签名认证，不尝试旧的 `ssh-rsa` / SHA-1 签名或 DSA。仅支持这些旧算法的服务器需要先升级服务器配置。
 - 首次信任（TOFU）不是自动验证服务器身份；指纹应由独立可信渠道确认。
 - 同一地址和端口已有身份时，未信任的新密钥算法同样阻止连接，不会重新弹出首次信任提示；核验服务器变更后，需在已知主机中显式移除该端点旧记录再重新登记。已有多算法信任记录仍可正常核验。
@@ -273,15 +296,15 @@ SFTP 活动会记录连接结果、文件操作类型、传输方向和完成字
 - WebView2 只加载本地虚拟域名资源，禁止外部导航、弹窗、下载和权限申请；页面采用 CSP，不从 CDN 加载脚本。终端输出交由 xterm.js 解析，不插入 HTML。
 - macOS 使用隔离、沙箱化的 Electron 页面，只加载随应用分发的 `termlume://app/` 资源；原生桥校验主窗口与主 frame、操作白名单和消息上限。后端通过子进程标准输入 / 输出通信，仅在账号登录期间开启 IPv4 回环回调端口；密码由独立受限窗口交给连接后端，不注入主工作台。
 - 将配置备份到安全位置。应用退出后可复制 / 恢复 `workspace.json`。损坏的配置会阻止启动，不会被静默覆盖。
-- 账号登录、续期、资料校验和退出会请求配置的 Aegis-IAM 服务；访问和 ID 令牌仅保存在后端内存，刷新凭据安全保存在 Windows 凭据管理器 / macOS 钥匙串。正常关闭后重新打开会自动向 IAM 验证并恢复会话；退出登录会清除本机凭据并请求服务端撤销。不上传主机、片段或日志，不含遥测。WebView2 Runtime 自身由 Microsoft 管理。
+- 账号登录、续期、资料校验和退出会请求配置的 Aegis-IAM 服务；访问和 ID 令牌仅保存在后端内存，刷新凭据安全保存在 Windows 凭据管理器 / macOS 钥匙串。正常关闭后重新打开会自动向 IAM 验证并恢复会话；退出登录会清除本机凭据并请求服务端撤销。主机和片段通过工作区 API 同步；活动日志按账号设置上传有限元数据，不含遥测。WebView2 Runtime 自身由 Microsoft 管理。
 
 ## 当前范围
 
-当前支持真实 SSH 终端与 SFTP 文件管理。暂不包含跳板机、代理、端口转发、SSH agent、键盘交互 / MFA、密钥生成、云同步和自动更新；不承诺支持所有 SSH / SFTP 服务器或认证配置。
+当前支持真实 SSH 终端与 SFTP 文件管理。暂不包含跳板机、代理、端口转发、SSH agent、键盘交互 / MFA、密钥生成和自动更新；不承诺支持所有 SSH / SFTP 服务器或认证配置。
 
 ## 项目结构
 
-三个 .NET 项目按职责命名：`TermLume.Windows` 是 Windows 桌面入口，`TermLume.DesktopBackend` 是供 Electron 桌面壳调用的后台进程，`TermLume.Shared` 是两端共用的业务类库。Windows 直接调用共享类库，不启动桌面后端。
+四个 .NET 项目按职责命名：`TermLume.Windows` 是 Windows 桌面入口，`TermLume.DesktopBackend` 是供 Electron 桌面壳调用的后台进程，`TermLume.Shared` 是两端共用的业务类库，`TermLume.Api` 是工作区业务与数据库服务。Windows 直接调用共享类库，不启动桌面后端。
 
 项目更名不改变产品标识：Windows 仍生成 `TermLume.exe`，安装器升级标识、应用名称及用户数据目录保持不变。
 
@@ -294,6 +317,9 @@ SFTP 活动会记录连接结果、文件操作类型、传输方向和完成字
 | `TermLume.Windows/Views` | 原生凭据对话框和本地化界面支持 |
 | `TermLume.Windows/MainWindow.xaml.cs`、`TermLume.Windows/Platform` | Windows 窗口、WebView2 消息桥及原生对话框、线程调度适配 |
 | `TermLume.Windows/Web` | 工作台、设置、双栏文件管理及本地终端资源 |
+| `TermLume.Api` | 验证 Aegis 访问令牌、独立工作区 API、PostgreSQL 事务与迁移 |
+| `tools/Start-WorkspaceApi.ps1` | 初始化本地 Docker 业务数据库并启动 API |
+| `tests/workspace-api.integration.cjs` | 使用真实 PostgreSQL 的业务、安全与并发测试 |
 | `TermLume.DesktopBackend` | macOS 桌面使用的 .NET 进程入口、标准输入 / 输出桥及线程调度，项目引用共享核心 |
 | `desktop` | Electron 桌面入口、受限预加载桥、macOS 凭据窗口及 DMG / ZIP 构建脚本 |
 | `.github/workflows/macos.yml` | Apple Silicon / Intel 构建、回归验证与工作流安装包附件 |
@@ -308,6 +334,6 @@ SFTP 活动会记录连接结果、文件操作类型、传输方向和完成字
 | `vendor/packages`、`tools/Build-SshNet.ps1` | 固定来源的 SSH.NET 安全补丁及重建脚本 |
 | `artifacts/` | 本地生成的 Windows EXE、macOS DMG / ZIP，整个目录不提交 Git |
 
-Windows 与 macOS 通过 `ProjectReference` 使用同一份 `TermLume.Shared` 类库，不再链接编译服务源码或维护两套业务控制器。用户数据目录与 JSON 格式不变，升级无需迁移工作空间文件。详细分层和开发约定见 [架构说明](docs/architecture.md)。
+Windows 与 macOS 通过 `ProjectReference` 使用同一份 `TermLume.Shared` 类库，不再链接编译服务源码或维护两套业务控制器。用户数据根目录保持不变；新版在其下使用账号独立缓存，旧数据通过确认导入迁移到 PostgreSQL。详细分层和开发约定见 [架构说明](docs/architecture.md)。
 
 第三方终端资源许可证位于 `TermLume.Windows/Web/vendor`。本地构建产生的中间产物不属于发布文件，个人配置始终保存在仓库以外的应用数据目录。

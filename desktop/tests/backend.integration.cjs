@@ -27,9 +27,11 @@ test('stdio bridge preserves SSH, SFTP, credentials, trust, logs and saved data'
   const originalIssuer = process.env.TERMLUME_IAM_ISSUER;
   const originalClient = process.env.TERMLUME_IAM_CLIENT_ID;
   const originalRedirect = process.env.TERMLUME_IAM_REDIRECT_URI;
+  const originalWorkspaceApi = process.env.TERMLUME_WORKSPACE_API_URL;
   process.env.TERMLUME_IAM_ISSUER = oidc.issuer;
   process.env.TERMLUME_IAM_CLIENT_ID = 'termlume-desktop';
   process.env.TERMLUME_IAM_REDIRECT_URI = await oidc.callbackUri();
+  process.env.TERMLUME_WORKSPACE_API_URL = oidc.issuer;
   try {
     await until(() => { if (fixture.exitCode !== null) throw new Error(errors); return fs.existsSync(path.join(root, 'port.txt')); });
     const port = Number(fs.readFileSync(path.join(root, 'port.txt'), 'utf8'));
@@ -99,15 +101,20 @@ test('stdio bridge preserves SSH, SFTP, credentials, trust, logs and saved data'
     assert.ok(entries.length);
     assert.equal(await call('exportLogs', { ids: entries.map(entry => entry.id) }), true);
     assert.ok(fs.existsSync(exportPath));
-    exportPath = path.join(dataDirectory, 'workspace.json');
+    const scopedDirectory = (await call('workspaceSync')).dataDirectory;
+    assert.ok(scopedDirectory.startsWith(path.join(dataDirectory, 'accounts') + path.sep));
+    exportPath = path.join(scopedDirectory, 'workspace.json');
     const before = fs.readFileSync(exportPath);
     const blocked = await backend.request({ id: 'blocked-export', op: 'exportLogs', payload: { ids: entries.map(entry => entry.id) } });
     assert.equal(blocked.ok, false);
     assert.deepEqual(fs.readFileSync(exportPath), before);
-    exportPath = path.join(dataDirectory, 'WORKSPACE.JSON');
+    exportPath = path.join(scopedDirectory, 'WORKSPACE.JSON');
     const caseVariant = await backend.request({ id: 'case-variant-export', op: 'exportLogs', payload: { ids: entries.map(entry => entry.id) } });
     assert.equal(caseVariant.ok, false);
-    assert.deepEqual(fs.readFileSync(path.join(dataDirectory, 'workspace.json')), before);
+    assert.deepEqual(fs.readFileSync(path.join(scopedDirectory, 'workspace.json')), before);
+    exportPath = path.join(dataDirectory, 'workspace-import-owner.json');
+    assert.equal((await backend.request({ id: 'claim-export', op: 'exportLogs', payload: { ids: entries.map(entry => entry.id) } })).ok, false);
+    assert.equal(fs.existsSync(exportPath), false);
     await backend.close();
     await until(() => backend.stopped);
     let reopenBrowserCalls = 0;
@@ -123,7 +130,7 @@ test('stdio bridge preserves SSH, SFTP, credentials, trust, logs and saved data'
     assert.equal((await backend.request({ id: 'after-logout', op: 'workspace', payload: {} })).errorCode, 'authentication_required');
     await backend.close();
     await until(() => backend.stopped);
-    for (const name of ['workspace.json', 'activity-log.json']) assert.ok(!fs.readFileSync(path.join(dataDirectory, name), 'utf8').includes('test-only'));
+    for (const name of ['workspace.json', 'activity-log.json']) assert.ok(!fs.readFileSync(path.join(scopedDirectory, name), 'utf8').includes('test-only'));
     backend = new Backend(executable, dataDirectory, () => {}, async (operation, payload) => { if (operation === 'openBrowser') { await oidc.openBrowser(payload.url); return true; } return null; }, () => {});
     assert.equal((await call('authStatus')).authentication.isAuthenticated, false);
     await call('authLogin');
@@ -142,6 +149,7 @@ test('stdio bridge preserves SSH, SFTP, credentials, trust, logs and saved data'
     if (originalIssuer === undefined) delete process.env.TERMLUME_IAM_ISSUER; else process.env.TERMLUME_IAM_ISSUER = originalIssuer;
     if (originalClient === undefined) delete process.env.TERMLUME_IAM_CLIENT_ID; else process.env.TERMLUME_IAM_CLIENT_ID = originalClient;
     if (originalRedirect === undefined) delete process.env.TERMLUME_IAM_REDIRECT_URI; else process.env.TERMLUME_IAM_REDIRECT_URI = originalRedirect;
+    if (originalWorkspaceApi === undefined) delete process.env.TERMLUME_WORKSPACE_API_URL; else process.env.TERMLUME_WORKSPACE_API_URL = originalWorkspaceApi;
   }
 });
 

@@ -21,6 +21,9 @@ async function createOidcFixture() {
   const codes = new Map(); const refreshTokens = new Set(); const accessTokens = new Set();
   const requests = [];
   const browserErrors = [];
+  const personalId = crypto.randomUUID().replaceAll("-", "");
+  let workspaceRevision = 0;
+  let workspace = { groups: [], hosts: [], snippets: [], knownHosts: {}, knownHostDetails: {}, preferences: {} };
   let behavior = {};
   let issuer;
   const profile = { sub: 'synthetic-subject', name: 'Synthetic <account>', preferred_username: 'synthetic', email: 'synthetic@example.test', email_verified: false };
@@ -50,6 +53,50 @@ async function createOidcFixture() {
     const parameters = new URLSearchParams(body);
     const send = (status, value) => { res.writeHead(status, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' }); res.end(JSON.stringify(value)); };
     requests.push({ path: url.pathname, method: req.method, body: Object.fromEntries(parameters), authorization: req.headers.authorization });
+    // 仅用于桌面桥接测试的内存业务服务；真实数据库与签名校验由 workspace-api.integration.cjs 覆盖。
+    if (url.pathname.startsWith('/v1/workspace')) {
+      if (behavior.revoke || !accessTokens.has((req.headers.authorization || '').replace(/^Bearer /, ''))) { send(401, {}); return; }
+      const context = { id: personalId, name: '个人工作区', kind: 'personal', role: 'owner', revision: workspaceRevision, canWrite: true, canManage: true };
+      if (url.pathname === '/v1/workspace/actions') {
+        const { action } = JSON.parse(body);
+        if (action === 'workspace.list') send(200, [context]);
+        else if (action === 'workspace.members') send(200, [{ id: personalId, name: profile.name, role: 'owner', current: true, joinedAt: new Date().toISOString() }]);
+        else if (action === 'device.list') send(200, [{ id: req.headers['x-termlume-device'], name: 'Synthetic laptop', platform: 'windows', version: '0.8.0', active: true, current: true, lastSeen: new Date().toISOString() }]);
+        else if (['workspace.invites', 'workspace.history', 'trust.list'].includes(action)) send(200, []);
+        else if (['activity.list', 'audit.list'].includes(action)) send(200, { entries: [], hasMore: false, offset: 0 });
+        else if (action === 'activity.upload') send(200, { accepted: JSON.parse(body).payload.entries.length });
+        else if (action === 'capabilities') send(200, { version: '0.8.0' });
+        else send(400, { error: 'Unsupported fixture operation' });
+        return;
+      }
+      if (req.method === 'POST') {
+        const change = JSON.parse(body);
+        if (change.expectedRevision !== workspaceRevision) { send(409, {}); return; }
+        const p = change.payload;
+        switch (change.operation) {
+          case 'saveGroup': workspace.groups.push(p.name); break;
+          case 'saveHost': {
+            const host = { color: 'mint', note: '', favorite: false, lastConnectedAt: null, ...p, id: p.id || change.newId || crypto.randomUUID().replaceAll('-', '') };
+            const previous = workspace.hosts.findIndex(item => item.id === host.id);
+            if (previous >= 0) workspace.hosts[previous] = host; else workspace.hosts.push(host);
+            if (!workspace.groups.includes(host.group)) workspace.groups.push(host.group);
+            break;
+          }
+          case 'deleteHost': workspace.hosts = workspace.hosts.filter(item => item.id !== p.id); break;
+          case 'favorite': { const host = workspace.hosts.find(item => item.id === p.id); host.favorite = typeof p.favorite === 'boolean' ? p.favorite : !host.favorite; break; }
+          case 'connected': workspace.hosts.find(item => item.id === p.id).lastConnectedAt = p.at || new Date().toISOString(); break;
+          case 'preferences': workspace.preferences = p; break;
+          case 'saveSnippet': {
+            const snippet = { ...p, id: p.id || change.newId || crypto.randomUUID().replaceAll('-', '') };
+            workspace.snippets = workspace.snippets.filter(item => item.id !== snippet.id).concat(snippet); break;
+          }
+          case 'deleteSnippet': workspace.snippets = workspace.snippets.filter(item => item.id !== p.id); break;
+          default: send(400, {}); return;
+        }
+        workspaceRevision++;
+      }
+      send(200, { revision: workspaceRevision, workspace, context: { ...context, revision: workspaceRevision } }); return;
+    }
     if (url.pathname === '/test/behavior') { behavior = JSON.parse(body || '{}'); send(200, {}); return; }
     if (url.pathname === '/test/stats') { send(200, { requests }); return; }
     if (url.pathname === '/.well-known/openid-configuration') {

@@ -9,8 +9,8 @@
         <Nullable>enable</Nullable>
         <ImplicitUsings>enable</ImplicitUsings>
         <UseWPF>true</UseWPF>
-        <Version>0.7.4</Version>
-        <RuntimeFrameworkVersion>10.0.14</RuntimeFrameworkVersion>
+        <Version>0.8.1</Version>
+        <RuntimeFrameworkVersion>10.0.15</RuntimeFrameworkVersion>
         <NuGetAudit>true</NuGetAudit>
         <NuGetAuditMode>all</NuGetAuditMode>
         <WarningsAsErrors>$(WarningsAsErrors);NU1903;NU1904</WarningsAsErrors>

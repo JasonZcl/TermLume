@@ -102,7 +102,11 @@ async function hostRequest(operation, payload = {}) {
       const result = await dialog.showOpenDialog(mainWindow, { title: payload.title, properties: ['openDirectory'] });
       return result.canceled ? null : result.filePaths[0];
     });
-    case 'exportLogs': return enqueuePrompt(async () => {
+    case 'importWorkspace': return enqueuePrompt(async () => {
+      const result = await dialog.showOpenDialog(mainWindow, { title: payload.title, properties: ['openFile'], filters: [{ name: 'TermLume JSON', extensions: ['json'] }] });
+      return result.canceled ? null : result.filePaths[0];
+    });
+    case 'exportWorkspace': case 'exportLogs': return enqueuePrompt(async () => {
       const result = await dialog.showSaveDialog(mainWindow, { title: payload.title, defaultPath: payload.name, filters: [{ name: 'JSON', extensions: ['json'] }] });
       return result.canceled ? null : result.filePath;
     });

@@ -58,8 +58,9 @@ public static class PreferenceSettings
     }
 
     /// <summary>加载旧配置时容错回退；界面提交时使用严格模式，直接报告无效输入。</summary>
-    public static Preferences Normalize(Preferences value, bool strict = false)
+    public static Preferences Normalize(Preferences value, bool strict = false, bool? macOS = null)
     {
+        var defaults = macOS is null ? DefaultShortcuts : macOS.Value ? MacOSShortcuts : WindowsShortcuts;
         if (value.Language is not ("zh-CN" or "en"))
         {
             if (strict) throw new InvalidDataException("不支持的界面语言。");
@@ -76,9 +77,9 @@ public static class PreferenceSettings
         try
         {
             var supplied = value.Shortcuts ?? [];
-            if (supplied.Keys.Any(key => !DefaultShortcuts.ContainsKey(key))) throw new InvalidDataException("快捷键操作不存在。");
-            var shortcuts = DefaultShortcuts.ToDictionary(pair => pair.Key, pair => NormalizeShortcut(supplied.GetValueOrDefault(pair.Key, pair.Value)));
-            if (!supplied.ContainsKey("snippets") && shortcuts.Any(pair => pair.Key != "snippets" && pair.Value == DefaultShortcuts["snippets"]))
+            if (supplied.Keys.Any(key => !defaults.ContainsKey(key))) throw new InvalidDataException("快捷键操作不存在。");
+            var shortcuts = defaults.ToDictionary(pair => pair.Key, pair => NormalizeShortcut(supplied.GetValueOrDefault(pair.Key, pair.Value), macOS));
+            if (!supplied.ContainsKey("snippets") && shortcuts.Any(pair => pair.Key != "snippets" && pair.Value == defaults["snippets"]))
                 shortcuts["snippets"] = "";
             if (shortcuts.Values.Where(binding => binding.Length > 0).Distinct().Count() != shortcuts.Values.Count(binding => binding.Length > 0))
                 throw new InvalidDataException("多个操作使用了相同的快捷键，请先解除冲突。");
@@ -86,7 +87,7 @@ public static class PreferenceSettings
         }
         catch (InvalidDataException) when (!strict)
         {
-            value.Shortcuts = DefaultShortcuts.ToDictionary(pair => pair.Key, pair => pair.Value);
+            value.Shortcuts = defaults.ToDictionary(pair => pair.Key, pair => pair.Value);
         }
         return value;
     }

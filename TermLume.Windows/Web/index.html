@@ -11,6 +11,7 @@
   <link rel="stylesheet" href="settings.css">
   <link rel="stylesheet" href="sftp.css">
   <link rel="stylesheet" href="authentication.css">
+  <link rel="stylesheet" href="collaboration.css">
   <script src="vendor/xterm.js" defer></script>
   <script src="vendor/addon-fit.js" defer></script>
   <script src="platform.js" defer></script>
@@ -21,6 +22,7 @@
   <script src="sftp.js" defer></script>
   <script src="snippets.js" defer></script>
   <script src="authentication.js" defer></script>
+  <script src="collaboration.js" defer></script>
   <script src="app.js" defer></script>
 </head>
 <body class="authentication-required">
@@ -75,6 +77,7 @@
     </div>
   </header>
   <aside class="sidebar">
+    <button class="workspace-selector" data-view="collaboration" title="切换和管理工作区"><svg class="icon"><use href="#i-grid"/></svg><span id="workspace-selector-name">工作区</span><svg class="icon"><use href="#i-chevron"/></svg></button>
     <nav id="navigation" aria-label="主导航">
       <button class="nav-item active" data-view="hosts"><svg class="icon"><use href="#i-server"/></svg><span>所有主机</span><span class="nav-count" id="host-count">0</span></button>
       <button class="nav-item" data-view="favorites"><svg class="icon"><use href="#i-star"/></svg><span>收藏夹</span></button>
@@ -86,10 +89,11 @@
     </nav>
     <div class="nav-label group-label"><span>主机分组</span><button class="icon-button" data-action="newGroup" title="新建分组" aria-label="新建分组"><svg class="icon"><use href="#i-plus"/></svg></button></div>
     <div id="groups" class="groups"></div>
-    <div class="sidebar-bottom"><button class="nav-item account-button" data-action="account"><svg class="icon"><use href="#i-shield"/></svg><span id="account-name">账号</span></button><div class="local-note"><svg class="icon"><use href="#i-lock"/></svg><div><strong>本地工作空间</strong><p>配置只保存在此设备</p></div></div><button class="nav-item" data-view="settings"><svg class="icon"><use href="#i-settings"/></svg><span>设置</span><span class="version">v0.7.4</span></button></div>
+    <div class="sidebar-bottom"><button class="nav-item account-button" data-action="account"><svg class="icon"><use href="#i-shield"/></svg><span id="account-name">账号</span></button><div class="local-note"><svg class="icon"><use href="#i-lock"/></svg><div><strong>账号工作空间</strong><p>配置按账号同步</p></div></div><button class="nav-item" data-view="settings"><svg class="icon"><use href="#i-settings"/></svg><span>设置</span><span class="version">v0.8.1</span></button></div>
   </aside>
   <main class="main">
     <span class="sr-only" id="breadcrumb-label">所有主机</span>
+    <div id="workspace-sync-notice" class="workspace-sync-notice hidden" role="status"></div>
     <div class="page-scroll" id="page-scroll"><div id="page" class="page"></div></div>
     <section class="terminal-workspace hidden" id="terminal-workspace" aria-label="SSH 终端">
       <div class="terminal-toolbar"><span id="terminal-endpoint"></span><div><span id="terminal-state"></span><button class="subtle-button" data-action="toggleSnippets" aria-controls="terminal-snippets" aria-expanded="false"><svg class="icon"><use href="#i-code"/></svg>命令片段</button><button class="subtle-button" data-action="reconnect" id="reconnect-button">重新连接</button><button class="icon-button" data-action="clearTerminal" title="清空终端显示" aria-label="清空终端显示"><svg class="icon"><use href="#i-trash"/></svg></button><button class="subtle-button" data-action="disconnect">断开连接</button></div></div>

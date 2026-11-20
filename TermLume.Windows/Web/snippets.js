@@ -22,7 +22,7 @@ function renderSnippetPanel() {
   const panel = $('#terminal-snippets');
   if (!panel.querySelector('#snippet-search') || snippetPanelLanguage !== uiLanguage) {
     snippetPanelLanguage = uiLanguage;
-    panel.innerHTML = ui`<div class="snippet-panel-heading"><div>${icon('code')}<strong>命令片段</strong></div><button class="icon-button" data-action="closeSnippets" title="关闭片段侧栏" aria-label="关闭片段侧栏">${icon('close')}</button></div><div class="snippet-panel-search"><input id="snippet-search" type="search" placeholder="搜索名称或命令" aria-label="搜索名称或命令" maxlength="200"></div><div class="snippet-panel-context"></div><div class="snippet-panel-list"></div><div class="snippet-panel-bottom"><button class="subtle-button" data-action="newSnippet">${icon('plus')}新建片段</button><span>本地存储 · 谨慎执行</span></div>`;
+    panel.innerHTML = ui`<div class="snippet-panel-heading"><div>${icon('code')}<strong>命令片段</strong></div><button class="icon-button" data-action="closeSnippets" title="关闭片段侧栏" aria-label="关闭片段侧栏">${icon('close')}</button></div><div class="snippet-panel-search"><input id="snippet-search" type="search" placeholder="搜索名称或命令" aria-label="搜索名称或命令" maxlength="200"></div><div class="snippet-panel-context"></div><div class="snippet-panel-list"></div><div class="snippet-panel-bottom"><button class="subtle-button" data-action="newSnippet">${icon('plus')}新建片段</button><span>账号同步 · 谨慎执行</span></div>`;
     $('#snippet-search').value = snippetSearch;
     $('#snippet-search').addEventListener('input', event => { snippetSearch = event.target.value; renderSnippetPanel(); });
     $('#snippet-search').addEventListener('keydown', event => {

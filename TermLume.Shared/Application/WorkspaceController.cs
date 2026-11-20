@@ -8,7 +8,7 @@ namespace TermLume.Shared.Application;
 
 public sealed partial class WorkspaceController
 {
-    private readonly WorkspaceStore store;
+    private WorkspaceStore store;
     private readonly string dataDirectory;
     private readonly IWorkspaceHost host;
     private readonly IWorkspaceDispatcher Dispatcher;
@@ -20,7 +20,7 @@ public sealed partial class WorkspaceController
     private bool signingOut;
     private bool checkingAuthentication;
 
-    public WorkspaceController(string dataDirectory, IWorkspaceHost host, IWorkspaceDispatcher dispatcher, IWorkspaceAuthentication? authentication = null)
+    public WorkspaceController(string dataDirectory, IWorkspaceHost host, IWorkspaceDispatcher dispatcher, IWorkspaceAuthentication? authentication = null, IWorkspaceSynchronization? synchronization = null)
     {
         this.dataDirectory = dataDirectory;
         this.host = host;
@@ -35,6 +35,20 @@ public sealed partial class WorkspaceController
             var options = AegisOptions.Load();
             this.authentication = new AegisAuthentication(options, new SystemAegisSessionStore(options, dataDirectory));
         }
+        this.synchronization = synchronization ?? new WorkspaceApiClient(WorkspaceApiOptions.Load(),
+            this.authentication as IWorkspaceAccessTokenProvider ?? throw new InvalidOperationException("认证实现未提供业务服务访问凭据。"), DeviceIdentity.Load(dataDirectory));
+        legacyWorkspace = WorkspaceChanges.Clone(workspace);
+        if (this.synchronization.Enabled)
+        {
+            workspace = new Workspace { Preferences = workspace.Preferences };
+            var bootstrapPath = Path.Combine(dataDirectory, "device-preferences.json");
+            if (File.Exists(bootstrapPath))
+            {
+                try { workspace.Preferences = PreferenceSettings.Normalize(JsonSerializer.Deserialize<Preferences>(File.ReadAllText(bootstrapPath), WorkspaceStore.JsonOptions) ?? new Preferences()); }
+                catch (Exception error) when (error is IOException or JsonException) { }
+            }
+            Localization.Language = workspace.Preferences.Language;
+        }
         authenticationTimer = new Timer(_ => Dispatcher.BeginInvoke(CheckAuthentication), null, TimeSpan.FromSeconds(30), TimeSpan.FromSeconds(30));
         Record("application.started", "TermLume 已启动。", category: "application");
     }
@@ -44,6 +58,7 @@ public sealed partial class WorkspaceController
     public async Task HandleAsync(JsonElement request, IReadOnlyList<string>? nativePaths = null)
     {
         string? id = null;
+        long? requestGeneration = null;
         try
         {
             id = request.GetProperty("id").GetString();
@@ -52,7 +67,9 @@ public sealed partial class WorkspaceController
             if (shuttingDown && operation != "shutdown") throw new OperationCanceledException("应用正在退出。");
             var payload = request.GetProperty("payload");
             var protectedOperation = operation is not ("authStatus" or "authLogin" or "authCancel" or "authLogout" or "status" or "shutdown");
-            var generation = protectedOperation ? await RequireAuthenticationAsync() : authentication.Generation;
+            var generation = protectedOperation ? await RequireAuthenticationAsync() : CurrentGeneration;
+            requestGeneration = generation;
+            if (protectedOperation) { await EnsureWorkspaceAsync(generation); RequireAuthenticationGeneration(generation); }
             object? result = operation switch
             {
                 "authStatus" => new { authentication = await RefreshAuthenticationAsync(), language = workspace.Preferences.Language },
@@ -62,18 +79,27 @@ public sealed partial class WorkspaceController
                 "copy" => await CopyAsync(payload),
                 "paste" => await host.RequestAsync<string>("paste"),
                 "pickKey" => await host.RequestAsync<string>("pickKey"),
-                "workspace" => workspace,
+                "workspace" => await RefreshWorkspaceAsync(generation),
+                "workspaceSync" => SynchronizationState(),
+                "workspaceAdmin" => await AdministerWorkspaceAsync(payload, generation),
+                "selectWorkspace" => await SelectWorkspaceAsync(payload, generation),
+                "retryPendingChanges" => await ResolveOutboxAsync(true, generation),
+                "discardPendingChanges" => await ResolveOutboxAsync(false, generation),
+                "exportWorkspace" => await ExportWorkspaceAsync(generation),
+                "importWorkspace" => await ImportWorkspaceFileAsync(generation),
+                "adoptTrustReference" => await AdoptTrustReferenceAsync(payload, generation),
+                "importLegacyWorkspace" => await ImportLegacyWorkspaceAsync(generation),
                 "knownHosts" => KnownHosts.Entries(),
                 "logs" => activityLog.Snapshot(),
                 "clearLogs" => activityLog.Clear(),
                 "exportLogs" => await ExportLogsAsync(payload),
-                "saveGroup" => SaveGroup(payload),
-                "saveHost" => SaveHost(payload),
-                "deleteHost" => DeleteHost(payload.GetProperty("id").GetString()!),
-                "favorite" => ToggleFavorite(payload.GetProperty("id").GetString()!),
-                "saveSnippet" => SaveSnippet(payload),
-                "deleteSnippet" => DeleteSnippet(payload.GetProperty("id").GetString()!),
-                "preferences" => SavePreferences(payload),
+                "saveGroup" => synchronization.Enabled ? await ChangeWorkspaceAsync(operation, payload, generation) : SaveGroup(payload),
+                "saveHost" => synchronization.Enabled ? await ChangeWorkspaceAsync(operation, payload, generation) : SaveHost(payload),
+                "deleteHost" => synchronization.Enabled ? await ChangeWorkspaceAsync(operation, payload, generation) : DeleteHost(payload.GetProperty("id").GetString()!),
+                "favorite" => synchronization.Enabled ? await ChangeWorkspaceAsync(operation, payload, generation) : ToggleFavorite(payload.GetProperty("id").GetString()!),
+                "saveSnippet" => synchronization.Enabled ? await ChangeWorkspaceAsync(operation, payload, generation) : SaveSnippet(payload),
+                "deleteSnippet" => synchronization.Enabled ? await ChangeWorkspaceAsync(operation, payload, generation) : DeleteSnippet(payload.GetProperty("id").GetString()!),
+                "preferences" => synchronization.Enabled ? await ChangeWorkspaceAsync(operation, payload, generation) : SavePreferences(payload),
                 "forgetKey" => ForgetKey(payload.GetProperty("endpoint").GetString()!),
                 "connect" => await ConnectAsync(payload),
                 "disconnect" => Disconnect(payload.GetProperty("sessionId").GetString()!),
@@ -86,13 +112,25 @@ public sealed partial class WorkspaceController
                 _ when operation?.StartsWith("sftp", StringComparison.Ordinal) == true => await HandleSftpAsync(operation, payload),
                 _ => throw new InvalidOperationException("未知操作。")
             };
+            if (operation == "selectWorkspace") generation = CurrentGeneration;
             if (protectedOperation) RequireAuthenticationGeneration(generation);
             host.Send(new { type = "reply", id, ok = true, result });
         }
         catch (Exception exception)
         {
-            host.Send(new { type = "reply", id, ok = false, error = exception.Message,
-                errorCode = exception is AccountRequiredException ? "authentication_required" : null });
+            var activeGeneration = CurrentGeneration;
+            var staleWorkspace = authentication.State.IsAuthenticated && !signingOut && requestGeneration is { } previous && previous >= authenticationContextGeneration && previous != activeGeneration;
+            if (exception is WorkspaceAccessException && !signingOut && requestGeneration == CurrentGeneration)
+            {
+                try { await LogoutAsync(); } catch (Exception) { }
+            }
+            else if (exception is WorkspaceAccessException && !signingOut && !authentication.State.IsAuthenticated && !authentication.State.IsLoggingIn)
+            {
+                NotifyAuthentication();
+                await CloseAccountSessionsAsync();
+            }
+            host.Send(new { type = "reply", id, ok = false, error = staleWorkspace ? "工作区已切换，请重试。" : exception.Message,
+                errorCode = staleWorkspace || exception is WorkspaceContextChangedException ? "workspace_changed" : exception is AccountRequiredException or WorkspaceAccessException ? "authentication_required" : exception is WorkspaceConflictException ? "workspace_conflict" : exception is WorkspacePermissionException ? "workspace_forbidden" : null });
         }
     }
 
@@ -119,12 +157,14 @@ public sealed partial class WorkspaceController
     public async Task<bool> ShutdownAsync()
     {
         if (shuttingDown) return true;
+        shuttingDown = true;
         authenticationTimer.Dispose();
+        accountCancellation.Cancel();
+        synchronization.Dispose();
         authentication.Dispose();
         foreach (var id in sessions.Keys.ToArray()) EndSessionActivity(id, "connection.disconnected", "应用退出，SSH 连接已关闭。");
         var transfers = transferJobs.Values.ToArray();
         foreach (var job in transfers) job.Cancellation.Cancel();
-        shuttingDown = true;
         try { await Task.WhenAll(transfers.Select(job => job.Completion)).WaitAsync(TimeSpan.FromSeconds(10)); }
         catch (TimeoutException) { }
         Record("application.stopped", "TermLume 已退出。", category: "application");
@@ -242,7 +282,7 @@ public sealed partial class WorkspaceController
 
     private async Task<object> ConnectAsync(JsonElement payload)
     {
-        var generation = authentication.Generation;
+        var generation = CurrentGeneration;
         var host = GetHost(payload.GetProperty("hostId").GetString()!);
         var sessionId = payload.GetProperty("sessionId").GetString()!;
         if (sessions.Count >= 12) throw new InvalidOperationException("最多同时打开 12 个连接，请先关闭不再使用的会话。");
@@ -283,6 +323,7 @@ public sealed partial class WorkspaceController
             if (shuttingDown || !sessions.ContainsKey(sessionId)) throw new OperationCanceledException("连接已取消。");
             host.LastConnectedAt = DateTimeOffset.Now;
             store.Save(workspace);
+            await RecordRecentConnectionAsync(host.Id, generation);
             return new { workspace };
         }
         catch (Exception exception)
@@ -301,10 +342,10 @@ public sealed partial class WorkspaceController
     // SSH 与 SFTP 共用身份核验；首次信任需用户确认，已保存指纹变化时直接阻止连接。
     private bool VerifyHostKey(HostProfile host, HostKeyEventArgs key, string sessionId, long generation)
     {
-        if (shuttingDown || signingOut || !authentication.State.IsAuthenticated || generation != authentication.Generation) return false;
+        if (shuttingDown || signingOut || !authentication.State.IsAuthenticated || generation != CurrentGeneration) return false;
         return Dispatcher.Invoke(() =>
         {
-            if (shuttingDown || signingOut || !authentication.State.IsAuthenticated || generation != authentication.Generation) return false;
+            if (shuttingDown || signingOut || !authentication.State.IsAuthenticated || generation != CurrentGeneration) return false;
             var endpoint = KnownHostRegistry.Endpoint(host, key.HostKeyName);
             var fingerprint = "SHA256:" + key.FingerPrintSHA256;
             var status = KnownHosts.Verify(host, key.HostKeyName, fingerprint);
@@ -330,7 +371,7 @@ public sealed partial class WorkspaceController
                 return false;
             }
             var answer = this.host.RequestAsync<bool>("trustHost", new { message = Localization.Text("首次连接到 {0}:{1}\n\n算法：{2}\n指纹：{3}\n\n请通过可信渠道向管理员核对指纹。确认信任并保存吗？", host.Address, host.Port, key.HostKeyName, fingerprint), title = Localization.Text("确认 SSH 服务器身份") }).GetAwaiter().GetResult();
-            if (shuttingDown || signingOut || !authentication.State.IsAuthenticated || generation != authentication.Generation) return false;
+            if (shuttingDown || signingOut || !authentication.State.IsAuthenticated || generation != CurrentGeneration) return false;
             if (!answer)
             {
                 Record("hostkey.rejected", "用户未确认服务器指纹，连接已阻止。", host, sessionId, level: "warning", category: "security", details: new() { ["endpoint"] = endpoint, ["fingerprint"] = fingerprint });

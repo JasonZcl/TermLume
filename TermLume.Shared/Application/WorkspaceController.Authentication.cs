@@ -1,9 +1,18 @@
 using TermLume.Shared.Abstractions;
+using TermLume.Shared.Models;
 
 namespace TermLume.Shared.Application;
 
 public sealed partial class WorkspaceController
 {
+    private long observedAuthenticationGeneration = long.MinValue;
+    private long contextGeneration;
+    private long authenticationContextGeneration;
+    private long CurrentGeneration
+    {
+        get { if (observedAuthenticationGeneration != authentication.Generation) { observedAuthenticationGeneration = authentication.Generation; contextGeneration++; authenticationContextGeneration = contextGeneration; } return contextGeneration; }
+    }
+    private sealed class WorkspaceContextChangedException() : InvalidOperationException("工作区已切换，请重试。");
     private sealed class AccountRequiredException() : InvalidOperationException("请先登录 Aegis-IAM。");
 
     private AccountState AuthenticationState => signingOut
@@ -12,13 +21,18 @@ public sealed partial class WorkspaceController
 
     private void RequireAuthenticationGeneration(long generation)
     {
-        if (shuttingDown || signingOut || !authentication.State.IsAuthenticated || generation != authentication.Generation)
+        if (shuttingDown || signingOut || !authentication.State.IsAuthenticated)
             throw new AccountRequiredException();
+        if (generation != CurrentGeneration)
+        {
+            if (generation >= authenticationContextGeneration) throw new WorkspaceContextChangedException();
+            throw new AccountRequiredException();
+        }
     }
 
     private async Task<long> RequireAuthenticationAsync()
     {
-        var generation = authentication.Generation;
+        var generation = CurrentGeneration;
         if (signingOut || !(await RefreshAuthenticationAsync()).IsAuthenticated) throw new AccountRequiredException();
         // 异步校验返回的快照可能早于退出或切换账号，执行操作前必须重新核验当前状态。
         RequireAuthenticationGeneration(generation);
@@ -31,6 +45,8 @@ public sealed partial class WorkspaceController
         var state = await authentication.ValidateAsync();
         if (authenticated && !state.IsAuthenticated)
         {
+            accountCancellation.Cancel();
+            loadedAccount = null;
             // 校验失败先锁界面，再释放会话；不再向登录页面交付工作区内容。
             NotifyAuthentication();
             await CloseAccountSessionsAsync();
@@ -42,8 +58,20 @@ public sealed partial class WorkspaceController
     {
         if (shuttingDown || signingOut || checkingAuthentication || !authentication.State.IsAuthenticated) return;
         checkingAuthentication = true;
-        try { await RefreshAuthenticationAsync(); }
-        catch (OperationCanceledException) when (shuttingDown) { }
+        var generation = CurrentGeneration;
+        try
+        {
+            await RefreshAuthenticationAsync();
+            if (authentication.State.IsAuthenticated && loadedAccount is not null && synchronization.Enabled)
+            {
+                await RefreshWorkspaceAsync(generation);
+                await SynchronizeActivityAsync(generation);
+            }
+        }
+        catch (WorkspaceAccessException) { if (!signingOut && generation == CurrentGeneration) { try { await LogoutAsync(); } catch (IOException) { } } }
+        catch (Exception error) when (error is IOException or InvalidDataException or AccountRequiredException or WorkspaceContextChangedException or System.Text.Json.JsonException or UnauthorizedAccessException) { }
+        catch (OperationCanceledException) { }
+        catch (ObjectDisposedException) when (shuttingDown) { }
         finally { checkingAuthentication = false; }
     }
 
@@ -67,6 +95,8 @@ public sealed partial class WorkspaceController
     {
         if (signingOut) throw new InvalidOperationException("正在退出登录，请稍后重试。");
         signingOut = true;
+        accountCancellation.Cancel();
+        loadedAccount = null;
         try
         {
             NotifyAuthentication();

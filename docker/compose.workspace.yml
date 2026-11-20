@@ -1,0 +1,33 @@
+name: termlume
+services:
+  workspace-api:
+    image: termlume-workspace-api:0.9.0
+    build:
+      context: ..
+      dockerfile: TermLume.Api/Dockerfile
+    ports:
+      - "127.0.0.1:${TERMLUME_API_PORT:-18741}:8080"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    volumes:
+      - ../.local/api-docker.local.json:/run/secrets/settings.json:ro
+    read_only: true
+    tmpfs:
+      - /tmp:size=16m,mode=1777
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    pids_limit: 128
+    restart: unless-stopped
+  migrate:
+    image: termlume-workspace-api:0.9.0
+    profiles: [migration]
+    command: ["--migrate", "--settings", "/run/secrets/settings.json"]
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    volumes:
+      - ../.local/migration-docker.local.json:/run/secrets/settings.json:ro
+    read_only: true
+    tmpfs:
+      - /tmp:size=16m,mode=1777
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]

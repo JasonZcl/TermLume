@@ -1,3 +1,4 @@
+# 编译与本机构建产物
 **/bin/
 **/obj/
 .idea/
@@ -8,3 +9,19 @@
 **/node_modules/
 /desktop/backend/
 .DS_Store
+# 服务端凭据、数据库备份及本地环境；公开示例文件可提交
+/.local/
+.env
+.env.*
+!.env.example
+!.env.sample
+*.local.json
+*.dump
+*.dump.json
+*.pfx
+*.p12
+*.pem
+*.key
+id_rsa
+id_ed25519
+*.log

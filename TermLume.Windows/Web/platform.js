@@ -9,7 +9,7 @@ const macOSMessages = new Map([
   ['所有自定义快捷键都将恢复为 Windows 默认方案。其他设置不受影响。', '所有自定义快捷键都将恢复为 macOS 默认方案。其他设置不受影响。'],
   ['Ctrl+C / D / Z / L 保留终端控制语义，输入框保留 Ctrl+A / C / V / X 等编辑操作。Alt+F4、Win 等系统组合不由应用接管。', 'Ctrl+C / D / Z / L 保留终端控制语义，输入框保留 Command+A / C / V / X 等编辑操作。Command+Q / H / M 等系统组合不由应用接管。'],
   ['默认终端复制 / 粘贴使用 Ctrl + Shift + C / V。组合按物理键位记录；自定义后会优先于对应的远端按键生效。', '默认终端复制 / 粘贴使用 Command + C / V，标签切换使用 Control + Tab。组合按物理键位记录；自定义后会优先于对应的远端按键生效。'],
-  ['基于 WPF、WebView2、SSH.NET 与 xterm.js。支持 SSH 终端与 SFTP 文件管理，暂不包含跳板机和云同步。', '基于 Electron、.NET、SSH.NET 与 xterm.js。支持 SSH 终端与 SFTP 文件管理，暂不包含跳板机和云同步。'],
+  ['基于 WPF、WebView2、SSH.NET 与 xterm.js。支持 SSH、SFTP 和工作区同步，暂不包含跳板机。', '基于 Electron、.NET、SSH.NET 与 xterm.js。支持 SSH、SFTP 和工作区同步，暂不包含跳板机。'],
   ['此电脑', '本机'], ['此电脑：全部磁盘', '本机：系统磁盘与已挂载卷'],
   ['默认显示此电脑的全部磁盘。', '默认显示系统磁盘与已挂载卷。'],
   ['请使用 Ctrl / Alt 组合或 F1–F12 功能键；不支持 Windows 键或仅 Shift 加普通按键。', '请使用 Command / Ctrl / Option 组合或 F1–F12 功能键。'],

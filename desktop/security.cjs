@@ -5,7 +5,7 @@ const path = require('node:path');
 const pageUrl = 'termlume://app/index.html';
 const credentialUrl = 'termlume://app/credential.html';
 const authenticationOperations = ['authStatus', 'authLogin', 'authCancel', 'authLogout'];
-const allowedOperations = new Set(['workspace', 'knownHosts', 'logs', 'clearLogs', 'exportLogs', 'window', 'saveGroup', 'saveHost', 'deleteHost', 'favorite', 'saveSnippet', 'deleteSnippet', 'preferences', 'forgetKey', 'pickKey', 'connect', 'disconnect', 'input', 'resize', 'ack', 'copy', 'paste', 'sftpConnect', 'sftpDefaultLocal', 'sftpPickLocal', 'sftpLocalList', 'sftpCancel', 'sftpDisconnect', 'sftpList', 'sftpTransfer', 'sftpMutate']);
+const allowedOperations = new Set(['workspace', 'workspaceSync', 'importLegacyWorkspace', 'workspaceAdmin', 'selectWorkspace', 'retryPendingChanges', 'discardPendingChanges', 'exportWorkspace', 'importWorkspace', 'adoptTrustReference', 'knownHosts', 'logs', 'clearLogs', 'exportLogs', 'window', 'saveGroup', 'saveHost', 'deleteHost', 'favorite', 'saveSnippet', 'deleteSnippet', 'preferences', 'forgetKey', 'pickKey', 'connect', 'disconnect', 'input', 'resize', 'ack', 'copy', 'paste', 'sftpConnect', 'sftpDefaultLocal', 'sftpPickLocal', 'sftpLocalList', 'sftpCancel', 'sftpDisconnect', 'sftpList', 'sftpTransfer', 'sftpMutate']);
 
 function trustedFrame(event, contents, url = pageUrl) {
   return Boolean(contents && !contents.isDestroyed() && event.sender === contents && event.senderFrame === contents.mainFrame && event.senderFrame.url === url);

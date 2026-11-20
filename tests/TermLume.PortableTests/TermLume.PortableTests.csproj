@@ -5,9 +5,10 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
     <SelfContained>true</SelfContained>
-    <RuntimeFrameworkVersion>10.0.14</RuntimeFrameworkVersion>
+    <RuntimeFrameworkVersion>10.0.15</RuntimeFrameworkVersion>
   </PropertyGroup>
   <ItemGroup>
+    <Compile Include="../LocalTestWorkspaceSynchronization.cs" Link="LocalTestWorkspaceSynchronization.cs" />
     <ProjectReference Include="../../TermLume.Shared/TermLume.Shared.csproj" />
     <Compile Include="../TermLume.SecurityTests/Program.cs" Link="Program.cs" />
     <Compile Include="../TermLume.SecurityTests/WorkspaceControllerTests.cs" Link="WorkspaceControllerTests.cs" />

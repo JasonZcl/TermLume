@@ -9,10 +9,14 @@
 Windows: Web UI → WebView2 → WPF 平台适配 ─────────┐
                                                 ├→ TermLume.Shared → SSH.NET → 服务器
 macOS:   Web UI → Electron → JSON Lines → Backend ┘
+
+TermLume.Shared → HTTPS / 本机 HTTP → TermLume.Api → PostgreSQL
+                                    └→ Aegis-IAM（令牌与实时授权校验）
 ```
 
 - **共享界面**：`TermLume.Windows/Web` 保存 HTML、CSS、原生 JavaScript 和本地 xterm.js 资源。`platform.js` 处理平台显示差异，`i18n.js` 处理中英文切换。
 - **共享核心**：`TermLume.Shared` 是 `net10.0` 类库，由 Windows 应用和后端通过 `ProjectReference` 引用。模型、服务与请求处理只有一份实现，不使用链接编译来复制核心源码。
+- **业务 API**：`TermLume.Api` 基于 ABP Framework 10.7.1，通过 `TermLumeApiModule` 配置服务与管线、Autofac 注入 `WorkspaceAppService`，由显式 MVC 控制器保持 `/v1/workspace` 桌面协议。标准认证处理器验证 Aegis 访问令牌与实时授权，再由应用服务按账号访问 PostgreSQL。它与桌面后台进程是独立服务，数据库凭据只存在于服务器配置。
 - **Windows 入口**：`TermLume.Windows` 是 WPF / WebView2 应用，负责窗口、系统剪贴板、文件选择和原生对话框。
 - **macOS 入口**：`desktop` 负责 Electron 窗口与系统能力；`TermLume.DesktopBackend` 只负责启动核心、JSON Lines 通信和工作区线程调度，除账号登录期间的 IPv4 回环回调外，不启动本地网络服务。
 
@@ -59,7 +63,7 @@ macOS:   Web UI → Electron → JSON Lines → Backend ┘
 - Windows：`%LOCALAPPDATA%/TermLume/`。
 - macOS：`~/Library/Application Support/TermLume/`。
 
-程序目录和版本号不参与用户数据定位；无需迁移或删除已有配置。Web 资源继续由 Windows 工程复制、Electron 打包脚本收集；后端同时携带原生翻译所需的本地词典。`artifacts/` 只放最终安装包，保持 Git 忽略，正式安装包通过 GitHub Releases 发布。
+程序目录和版本号不参与用户数据定位。根目录旧文件保留；PostgreSQL 工作区使用 `accounts/<账号与服务标识>/` 保存每个账号的本机缓存、私钥路径、信任和日志，旧数据通过明确确认导入，不自动归属第一个登录账号。Web 资源继续由 Windows 工程复制、Electron 打包脚本收集；后端同时携带原生翻译所需的本地词典。`artifacts/` 只放最终安装包，保持 Git 忽略，正式安装包通过 GitHub Releases 发布。
 
 ## 开发与验证
 
@@ -85,4 +89,18 @@ macOS 的 PortableTests 使用 `-r osx-arm64` 或 `-r osx-x64`。共享控制器
 
 ## 账号认证
 
-共享核心的 `AegisAuthentication` 管理 OIDC 授权码 / PKCE、签名校验、刷新轮换、UserInfo 校验和撤销，令牌不进入 Web 界面。`IAegisSessionStore` 保存与 issuer、client ID 和账号绑定的刷新凭据；生产实现 `SystemAegisSessionStore` 调用 Windows 凭据管理器或 macOS 钥匙串，不依赖 WPF 或 Electron。按数据目录隔离的进程锁防止多个实例消费同一刷新凭据，数据目录内仅保存无令牌的启用标记。启动时使用保存的凭据刷新并完成签名与 UserInfo 校验后才解锁；关闭仅释放会话，退出登录则删除系统凭据并请求服务端撤销。`WorkspaceController` 在处理所有工作区操作前检查账号授权；退出或失效会关闭 SSH / SFTP。`IWorkspaceAuthentication` 和 `IAegisSessionStore` 供隔离测试替换依赖，两个生产入口始终使用真实 Aegis 实现，没有免登录开关。Windows / Electron 负责打开系统浏览器。部署与协议说明见 [Aegis-IAM 对接](aegis-iam.md)。
+共享核心的 `AegisAuthentication` 管理 OIDC 授权码 / PKCE、签名校验、刷新轮换、UserInfo 校验和撤销，令牌不进入 Web 界面。`WorkspaceApiClient` 从后端的 `IWorkspaceAccessTokenProvider` 获取访问令牌，通过受信配置的业务 API 读写工作区；不把数据库连接串交给桌面。`IAegisSessionStore` 保存与 issuer、client ID 和账号绑定的刷新凭据；生产实现 `SystemAegisSessionStore` 调用 Windows 凭据管理器或 macOS 钥匙串，不依赖 WPF 或 Electron。按数据目录隔离的进程锁防止多个实例消费同一刷新凭据，数据目录内仅保存无令牌的启用标记。启动时使用保存的凭据刷新并完成签名与 UserInfo 校验后才解锁；关闭仅释放会话，退出登录则删除系统凭据并请求服务端撤销。`WorkspaceController` 在处理所有工作区操作前检查账号授权；退出或失效会关闭 SSH / SFTP。`IWorkspaceAuthentication` 和 `IAegisSessionStore` 供隔离测试替换依赖，两个生产入口始终使用真实 Aegis 实现，没有免登录开关。Windows / Electron 负责打开系统浏览器。部署与协议说明见 [Aegis-IAM 对接](aegis-iam.md)。
+
+## 0.8.0 工作区协作
+
+`WorkspaceController` 按账号及工作区隔离缓存、信任、日志和 `WorkspaceOutbox`。队列先落盘，服务器以操作 ID 去重并以修订号检测冲突。工作区切换在认证代次之外也更新访问代次，使旧网络回复、凭据窗口和文件对话框失效，并关闭连接与传输。
+
+`TermLume.Api` 使用数据库事务、RLS 和固定 search_path 的权限函数执行团队成员、设备、历史、审计与信任参考管理。历史只保存共享资产，个人偏好与本机信任不随恢复回退。客户端上报日志会被双重过滤；服务端审计由 API 生成，运行角色仅可追加读取。完整部署、备份恢复与权限说明见 [PostgreSQL 工作区](postgresql.md)。
+
+## 0.9.0 ABP 工作区服务
+
+服务端采用单项目模块结构：`Application/WorkspaceAppService.cs` 实现 ABP 应用服务，`HttpApi/` 提供控制器与兼容桌面端的安全错误响应，`Security/` 将已验证的 IAM 身份映射为标准认证主体及请求作用域上下文。身份、设备和工作区选择始终从已认证请求读取，应用服务仍执行授权检查。
+
+已有 Npgsql 仓储继续负责事务内 RLS 上下文、操作去重和修订号。应用服务及控制器禁用自动 ABP 工作单元，避免与这些显式事务重叠；SQL 迁移及其历史校验值保持稳定。框架参数审计关闭，业务审计由原有仓储写入。仅发现业务及健康控制器，ABP 基础设施 API 不加入路由；严格 JSON、请求大小限制、Origin 拒绝和实时授权校验均有集成测试覆盖。
+
+`tools/Publish-WorkspaceDocker.ps1` 先备份已有 `termlume` 库，再准备配置、构建 `termlume-workspace-api:0.9.0`、验证迁移并启动容器。容器以非 root 身份和只读文件系统运行，数据库配置只读挂载，健康探针访问实际数据库。Docker 与本机开发服务使用相同的 `18741` 端口，部署脚本会关闭自己启动的本机 API。

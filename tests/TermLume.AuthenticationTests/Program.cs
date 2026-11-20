@@ -27,6 +27,8 @@ string RedirectUri()
 var root = Path.Combine(Path.GetTempPath(), "TermLume-auth-tests-" + Guid.NewGuid().ToString("N"));
 Directory.CreateDirectory(root);
 await AuthenticationBoundaryTests.RunAsync(Path.Combine(root, "boundaries"), Check);
+await WorkspaceSynchronizationTests.RunAsync(Path.Combine(root, "workspace-sync"), Check);
+await CollaborationTests.RunAsync(Path.Combine(root, "workspace-sync"), Check);
 using var fixture = Process.Start(new ProcessStartInfo("node")
 {
     ArgumentList = { Path.Combine(AppContext.BaseDirectory, "oidc-fixture.cjs") }, UseShellExecute = false,
@@ -69,7 +71,7 @@ try
 
     using var auth = Create();
     var host = new TestHost(Browser);
-    var controller = new WorkspaceController(root, host, new TestDispatcher(), auth);
+    var controller = new WorkspaceController(root, host, new TestDispatcher(), auth, new LocalTestWorkspaceSynchronization());
     async Task<JsonElement> Call(string operation, object? payload = null)
     {
         var id = Guid.NewGuid().ToString("N");

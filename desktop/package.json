@@ -1,6 +1,6 @@
 {
   "name": "termlume-desktop",
-  "version": "0.7.4",
+  "version": "0.8.1",
   "private": true,
   "description": "TermLume SSH and SFTP desktop workspace",
   "author": "TermLume contributors",
@@ -16,6 +16,9 @@
   "devDependencies": {
     "electron": "45.0.0",
     "electron-builder": "26.18.0"
+  },
+  "overrides": {
+    "minimatch@>=7.0.0 <11.0.1": "11.0.1"
   },
   "build": {
     "appId": "io.termlume.desktop",

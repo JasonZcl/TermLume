@@ -5,7 +5,7 @@ using TermLume.Shared.Abstractions;
 
 namespace TermLume.Shared.Services;
 
-public sealed class AegisAuthentication : IWorkspaceAuthentication
+public sealed class AegisAuthentication : IWorkspaceAuthentication, IWorkspaceAccessTokenProvider
 {
     private readonly AegisOptions configuration;
     private readonly IAegisSessionStore sessionStore;
@@ -33,6 +33,24 @@ public sealed class AegisAuthentication : IWorkspaceAuthentication
 
     public AccountState State => state;
     public long Generation { get; private set; }
+
+    public async Task<string> GetAccessTokenAsync(CancellationToken cancellationToken)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        var generation = Generation;
+        var wasAuthenticated = state.IsAuthenticated;
+        await ValidateAsync();
+        await mutex.WaitAsync(cancellationToken);
+        try
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            // 等待校验时切换账号，旧请求不得取得新账号的令牌。
+            if (wasAuthenticated && Generation != generation || !state.IsAuthenticated || string.IsNullOrEmpty(accessToken))
+                throw new TermLume.Shared.Models.WorkspaceAccessException();
+            return accessToken;
+        }
+        finally { mutex.Release(); }
+    }
 
     private OidcClient CreateClient() => new(new OidcClientOptions
     {
